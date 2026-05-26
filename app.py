@@ -42,7 +42,10 @@ def load_pipeline():
         TRAINED = bundle['TRAINED']
         print(f"Hitter pipeline loaded: {len(DATA):,} player-seasons")
         load_pitcher_pipeline()
-        prewarm_cache()
+        # Skip prewarm_cache on cloud deployment - loads on demand to save RAM
+        import os
+        if os.environ.get('RENDER') != 'true':
+            prewarm_cache()
     except Exception as e:
         import traceback
         print(f"PIPELINE ERROR: {e}")
