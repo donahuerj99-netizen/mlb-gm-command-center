@@ -6,3 +6,4 @@ requests
 xlrd
 openpyxl
 gunicorn
+pyarrow
