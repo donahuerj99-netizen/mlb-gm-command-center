@@ -27,18 +27,27 @@ TRAINED   = None
 
 def load_pipeline():
     global DATA, PROFILES, ARCH_BUNDLE, TRAINED
-    print("🔄  Loading pipeline...")
+    print("Loading pipeline...")
 
-    from data.scrapers     import fetch_real_data
     from models.clustering import fit_archetypes
     from models.prediction import build_prediction_dataset, train_war_model
 
-    DATA     = fetch_real_data(start_year=2000, end_year=2025)
+    # Load from pre-built CSV if available (faster, no XLS files needed)
+    import os, pandas as pd
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "real_seasons.csv")
+    if os.path.exists(csv_path):
+        print(f"Loading from CSV: {csv_path}")
+        DATA = pd.read_csv(csv_path)
+        print(f"Loaded {len(DATA):,} player-seasons from CSV")
+    else:
+        from data.scrapers import fetch_real_data
+        DATA = fetch_real_data(start_year=2000, end_year=2025)
+
     PROFILES, ARCH_BUNDLE = fit_archetypes(DATA)
     model_df, feature_cols = build_prediction_dataset(DATA, PROFILES)
     TRAINED  = train_war_model(model_df, feature_cols)
 
-    print("✅  Pipeline ready!")
+    print("Pipeline ready!")
     load_pitcher_pipeline()
     prewarm_cache()
 
@@ -200,16 +209,24 @@ PITCHER_TRAINED  = None
 
 def load_pitcher_pipeline():
     global PITCHER_DATA, PITCHER_PROFILES, PITCHER_BUNDLE, PITCHER_TRAINED
-    print("🔄  Loading pitcher pipeline...")
-    from data.pitcher_scraper       import fetch_pitcher_data
+    print("Loading pitcher pipeline...")
     from models.pitcher_clustering  import fit_pitcher_archetypes
     from models.pitcher_prediction  import build_pitcher_prediction_dataset, train_pitcher_model
 
-    PITCHER_DATA = fetch_pitcher_data(start_year=2000, end_year=2025)
+    import os, pandas as pd
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pitcher_seasons.csv")
+    if os.path.exists(csv_path):
+        print(f"Loading pitchers from CSV: {csv_path}")
+        PITCHER_DATA = pd.read_csv(csv_path)
+        print(f"Loaded {len(PITCHER_DATA):,} pitcher-seasons from CSV")
+    else:
+        from data.pitcher_scraper import fetch_pitcher_data
+        PITCHER_DATA = fetch_pitcher_data(start_year=2000, end_year=2025)
+
     PITCHER_PROFILES, PITCHER_BUNDLE = fit_pitcher_archetypes(PITCHER_DATA)
     model_df, feature_cols = build_pitcher_prediction_dataset(PITCHER_DATA, PITCHER_PROFILES)
     PITCHER_TRAINED = train_pitcher_model(model_df, feature_cols)
-    print("✅  Pitcher pipeline ready!")
+    print("Pitcher pipeline ready!")
 
 
 @app.route("/api/pitcher/<name>")
