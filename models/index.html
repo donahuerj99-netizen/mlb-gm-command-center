@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLB Front Office — Player Valuation</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:        #0a0c10;
+  --surface:   #12151c;
+  --surface2:  #1a1f2b;
+  --border:    #252b38;
+  --accent:    #00d4ff;
+  --accent2:   #ff6b35;
+  --green:     #00e676;
+  --red:       #ff3d57;
+  --text:      #e8eaf0;
+  --muted:     #6b7280;
+  --gold:      #fbbf24;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px;
+  letter-spacing: 3px;
+  color: var(--accent);
+}
+
+.logo span { color: var(--text); }
+
+.header-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  line-height: 1.6;
+}
+
+/* ── Search Bar ── */
+.search-section {
+  padding: 48px 40px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.search-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 48px;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.search-label span { color: var(--accent); }
+
+.search-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.search-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+}
+
+#player-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#player-input:focus { border-color: var(--accent); }
+
+#autocomplete {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+
+.ac-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.1s;
+}
+.ac-item:hover { background: var(--border); color: var(--accent); }
+
+.contract-inputs {
+  display: flex;
+  gap: 8px;
+}
+
+.contract-inputs input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  width: 130px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.contract-inputs input:focus { border-color: var(--accent2); }
+.contract-inputs input::placeholder { color: var(--muted); }
+
+#search-btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  padding: 14px 28px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+#search-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+#search-btn:active { transform: translateY(0); }
+
+/* ── Loading ── */
+#loading {
+  display: none;
+  text-align: center;
+  padding: 60px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+}
+
+.spinner {
+  width: 32px; height: 32px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Error ── */
+#error-msg {
+  display: none;
+  background: rgba(255,61,87,0.1);
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  padding: 16px 24px;
+  color: var(--red);
+  margin: 0 40px;
+  font-size: 14px;
+  max-width: 860px;
+  margin: 0 auto 24px;
+}
+
+/* ── Results ── */
+#results {
+  display: none;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px 60px;
+}
+
+/* Player Hero */
+.player-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.player-name-block { flex: 1; }
+
+.player-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 56px;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.player-meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.tag-pos  { background: rgba(0,212,255,0.12); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
+.tag-arch { background: rgba(255,107,53,0.12); color: var(--accent2); border: 1px solid rgba(255,107,53,0.3); }
+.tag-age  { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid var(--border); }
+
+.player-war-big {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.war-number {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 80px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.war-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Two column layout */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+/* Panels */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.panel-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Contract Verdict */
+.contract-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+.verdict-badge {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 36px;
+  letter-spacing: 2px;
+  padding: 12px 28px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.verdict-sign    { background: rgba(0,230,118,0.12); color: var(--green); border: 2px solid var(--green); }
+.verdict-caution { background: rgba(251,191,36,0.12); color: var(--gold); border: 2px solid var(--gold); }
+.verdict-avoid   { background: rgba(255,61,87,0.12);  color: var(--red);  border: 2px solid var(--red); }
+
+.contract-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  flex: 1;
+}
+
+.contract-stat { text-align: center; }
+
+.contract-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 26px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.contract-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Projection table */
+.proj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+}
+
+.proj-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.proj-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(37,43,56,0.5);
+}
+
+.proj-table tr:last-child td { border-bottom: none; }
+
+.proj-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.war-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.war-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.7;
+  transition: width 0.4s ease;
+}
+
+/* Chart canvas */
+canvas { max-height: 240px; }
+
+/* Archetype badge in results */
+.arch-description {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.surplus-positive { color: var(--green); }
+.surplus-negative { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MLB <span>Front Office</span></div>
+  <div class="header-meta">
+    Player Valuation System<br>
+    Powered by bWAR · 2010–2025
+  </div>
+</header>
+
+<div class="search-section">
+  <div class="search-label">Player <span>Valuation</span><br>Dashboard</div>
+  <div class="search-sub">Enter a player name to get WAR projections, archetype classification, and contract recommendations.</div>
+
+  <div class="search-row">
+    <div class="search-wrap">
+      <input id="player-input" type="text" placeholder="e.g. Aaron Judge, Mookie Betts..." autocomplete="off">
+      <div id="autocomplete"></div>
+    </div>
+    <div class="contract-inputs">
+      <input id="contract-years" type="number" min="1" max="10" value="4" placeholder="Yrs">
+      <input id="proposed-aav" type="number" min="0" step="0.5" placeholder="AAV ($M)">
+    </div>
+    <button id="search-btn" onclick="searchPlayer()">ANALYZE</button>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  Running projection model...
+</div>
+
+<div id="error-msg"></div>
+
+<div id="results">
+
+  <!-- Hero -->
+  <div class="player-hero">
+    <div class="player-name-block">
+      <div class="player-name" id="r-name">—</div>
+      <div class="player-meta">
+        <span class="tag tag-pos" id="r-pos">—</span>
+        <span class="tag tag-arch" id="r-arch">—</span>
+        <span class="tag tag-age" id="r-age">—</span>
+      </div>
+      <div class="arch-description" id="r-arch-desc"></div>
+    </div>
+    <div class="player-war-big">
+      <div class="war-number" id="r-war-latest">—</div>
+      <div class="war-label" id="r-war-year">WAR</div>
+      <div style="margin-top:8px; font-family:'DM Mono',monospace; font-size:12px; color:var(--muted)">
+        Career: <span id="r-career-war" style="color:var(--text)">—</span> WAR
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <!-- Contract Verdict -->
+  <div class="contract-panel" id="contract-panel">
+    <div class="verdict-badge" id="verdict-badge">—</div>
+    <div class="contract-numbers" id="contract-numbers"></div>
+  </div>
+
+  <!-- Charts + Projection Table -->
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-title">WAR History & Projection</div>
+      <canvas id="war-chart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">5-Year Projection</div>
+      <table class="proj-table">
+        <thead>
+          <tr>
+            <th>Season</th>
+            <th>Age</th>
+            <th>P10</th>
+            <th>Median</th>
+            <th>P90</th>
+            <th>Inj-Adj</th>
+            <th>Value ($M)</th>
+          </tr>
+        </thead>
+        <tbody id="proj-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let allPlayers = [];
+let warChart   = null;
+
+// Load player list for autocomplete
+fetch('/api/players')
+  .then(r => r.json())
+  .then(names => { allPlayers = names; });
+
+// Autocomplete
+const input = document.getElementById('player-input');
+const ac    = document.getElementById('autocomplete');
+
+input.addEventListener('input', () => {
+  const q = input.value.toLowerCase();
+  if (q.length < 2) { ac.style.display = 'none'; return; }
+  const matches = allPlayers.filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { ac.style.display = 'none'; return; }
+  ac.innerHTML = matches.map(n =>
+    `<div class="ac-item" onclick="selectPlayer('${n}')">${n}</div>`
+  ).join('');
+  ac.style.display = 'block';
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) ac.style.display = 'none';
+});
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchPlayer();
+});
+
+function selectPlayer(name) {
+  input.value = name;
+  ac.style.display = 'none';
+  searchPlayer();
+}
+
+function searchPlayer() {
+  const name  = input.value.trim();
+  if (!name) return;
+  const years = document.getElementById('contract-years').value || 4;
+  const aav   = document.getElementById('proposed-aav').value || '';
+
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('loading').style.display   = 'block';
+
+  let url = `/api/player/${encodeURIComponent(name)}?contract_years=${years}`;
+  if (aav) url += `&aav=${aav}`;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('loading').style.display = 'none';
+      if (data.error) {
+        showError(data.error);
+      } else if (data.ambiguous) {
+        showError('Multiple players found: ' + data.matches.join(', ') + '. Please be more specific.');
+      } else {
+        renderResults(data);
+      }
+    })
+    .catch(err => {
+      document.getElementById('loading').style.display = 'none';
+      showError('Server error: ' + err.message);
+    });
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+
+function renderResults(data) {
+  const { name, archetype, career, war_history, projection, contract } = data;
+
+  // Hero
+  document.getElementById('r-name').textContent      = name;
+  document.getElementById('r-pos').textContent       = career.position;
+  document.getElementById('r-arch').textContent      = archetype.archetype_label;
+  document.getElementById('r-age').textContent       = `Age ${career.age}`;
+  document.getElementById('r-war-latest').textContent = career.latest_WAR;
+  document.getElementById('r-career-war').textContent = career.career_WAR;
+
+  const archDescs = {
+    'Franchise Cornerstone': 'Elite tier — peak WAR 5+, wRC+ 125+. Trout, Pujols, Judge caliber players. Sign at (nearly) any cost.',
+    'Power Contact Hitter':  'Above-average hitter with solid power and consistent production. Core everyday player. Good aging profile.',
+    'High-K Power Threat':   'Big raw power and high ISO but elevated strikeout rate. Boom-or-bust. Short contracts preferred.',
+    'Speedy Slap Hitter':    'Speed-first profile, low ISO, strong defense. Declines rapidly as speed fades — avoid long deals past age 30.',
+    'Glove-First Defender':  'Elite defense drives value; below-average offense. Aging curve depends heavily on defensive durability.',
+    'Patient OBP Machine':   'High walk rate and on-base skills. Undervalued by traditional metrics. Ages gracefully — good long-term value.',
+    'Solid Contributor':     'Average to slightly above-average regular. Reliable depth piece but limited upside.',
+    'Bench/Utility Role':    'Below-average WAR producer. Value comes from positional flexibility and depth — avoid multi-year deals.',
+  };
+  document.getElementById('r-arch-desc').textContent =
+    archDescs[archetype.archetype_label] || '';
+
+  // Stats grid
+  const statsEl = document.getElementById('stats-grid');
+  const stats = [
+    { label: 'wRC+',     value: career.wRC_plus, note: career.wRC_plus > 100 ? '↑' : '↓' },
+    { label: 'OBP',      value: career.OBP.toFixed(3) },
+    { label: 'SLG',      value: career.SLG.toFixed(3) },
+    { label: 'ISO',      value: career.ISO.toFixed(3) },
+    { label: 'BB%',      value: career.BB_pct.toFixed(1) + '%' },
+    { label: 'K%',       value: career.K_pct.toFixed(1) + '%' },
+    { label: 'Def',      value: (career.Def > 0 ? '+' : '') + career.Def },
+    { label: 'Spd',      value: career.sprint_speed + ' ft/s' },
+    { label: 'Peak WAR', value: career.peak_WAR },
+    { label: 'Seasons',  value: career.seasons },
+  ];
+  statsEl.innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="stat-value">${s.value}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>
+  `).join('');
+
+  // Contract verdict
+  const surplus = contract.surplus_value_M;
+  const hasProposed = surplus !== undefined;
+  let verdictClass = 'verdict-sign';
+  let verdictText  = '✅ SIGN';
+  if (hasProposed) {
+    if (surplus < -10) { verdictClass = 'verdict-avoid';   verdictText = '❌ AVOID'; }
+    else if (surplus < 0) { verdictClass = 'verdict-caution'; verdictText = '⚠ CAUTION'; }
+  }
+  document.getElementById('verdict-badge').className = `verdict-badge ${verdictClass}`;
+  document.getElementById('verdict-badge').textContent = verdictText;
+
+  const cnEl = document.getElementById('contract-numbers');
+  const surplusColor = surplus >= 0 ? 'var(--green)' : 'var(--red)';
+  cnEl.innerHTML = `
+    <div class="contract-stat">
+      <div class="contract-value">${contract.projected_WAR}</div>
+      <div class="contract-label">Proj WAR</div>
+    </div>
+    <div class="contract-stat">
+      <div class="contract-value">$${contract.fair_AAV_M}M</div>
+      <div class="contract-label">Fair AAV</div>
+    </div>
+    <div class="contract-stat">
+      <div class="contract-value">$${contract.total_fair_value_M}M</div>
+      <div class="contract-label">Total Fair Value</div>
+    </div>
+    ${hasProposed ? `
+    <div class="contract-stat">
+      <div class="contract-value" style="color:${surplusColor}">${surplus >= 0 ? '+' : ''}$${surplus.toFixed(1)}M</div>
+      <div class="contract-label">Surplus Value</div>
+    </div>` : `
+    <div class="contract-stat">
+      <div class="contract-value">${contract.injury_adj_WAR}</div>
+      <div class="contract-label">Inj-Adj WAR</div>
+    </div>`}
+  `;
+
+  // Projection table
+  const tbody = document.getElementById('proj-tbody');
+  const maxWar = Math.max(...projection.map(p => p.war_p50));
+  tbody.innerHTML = projection.map(p => {
+    const barW = Math.round((p.war_p50 / maxWar) * 80);
+    return `
+    <tr>
+      <td>${p.season}</td>
+      <td>${p.age}</td>
+      <td style="color:var(--muted)">${p.war_p10.toFixed(1)}</td>
+      <td>
+        <div class="war-bar-wrap">
+          <span>${p.war_p50.toFixed(1)}</span>
+          <div class="war-bar" style="width:${barW}px"></div>
+        </div>
+      </td>
+      <td style="color:var(--muted)">${p.war_p90.toFixed(1)}</td>
+      <td style="color:var(--accent2)">${p.war_adj.toFixed(1)}</td>
+      <td style="color:var(--gold)">$${p.contract_value_M.toFixed(1)}M</td>
+    </tr>`;
+  }).join('');
+
+  // WAR Chart
+  const histYears = war_history.map(h => h.season);
+  const histWAR   = war_history.map(h => h.WAR);
+  const projYears = projection.map(p => p.season);
+  const projP50   = projection.map(p => p.war_p50);
+  const projP10   = projection.map(p => p.war_p10);
+  const projP90   = projection.map(p => p.war_p90);
+
+  if (warChart) warChart.destroy();
+  const ctx = document.getElementById('war-chart').getContext('2d');
+  warChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [...histYears, ...projYears],
+      datasets: [
+        {
+          label: 'Historical WAR',
+          data: [...histWAR, ...Array(projYears.length).fill(null)],
+          borderColor: '#00d4ff',
+          backgroundColor: 'rgba(0,212,255,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: 'Projected WAR (median)',
+          data: [...Array(histYears.length).fill(null), ...projP50],
+          borderColor: '#ff6b35',
+          borderWidth: 2,
+          borderDash: [6, 3],
+          pointRadius: 3,
+          tension: 0.3,
+        },
+        {
+          label: 'P10–P90 band',
+          data: [...Array(histYears.length).fill(null), ...projP90],
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(255,107,53,0.1)',
+          fill: '+1',
+          tension: 0.3,
+          pointRadius: 0,
+        },
+        {
+          label: '',
+          data: [...Array(histYears.length).fill(null), ...projP10],
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(255,107,53,0.1)',
+          tension: 0.3,
+          pointRadius: 0,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2b',
+          borderColor: '#252b38',
+          borderWidth: 1,
+          titleColor: '#6b7280',
+          bodyColor: '#e8eaf0',
+          callbacks: {
+            label: ctx => ctx.parsed.y !== null ? ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} WAR` : null
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 11 } },
+          grid:  { color: 'rgba(37,43,56,0.8)' }
+        },
+        y: {
+          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 11 } },
+          grid:  { color: 'rgba(37,43,56,0.8)' }
+        }
+      }
+    }
+  });
+
+  // Show results
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>

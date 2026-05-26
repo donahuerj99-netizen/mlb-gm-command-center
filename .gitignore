@@ -1,0 +1,20 @@
+# Training data - not needed at runtime
+data/advanced_*.xls
+data/pitch_standard_*.xls
+data/pitch_advanced_*.xls
+data/fielding_*.xls
+data/batting_*.xls
+data/standard_*.xls
+data/pitching_*.xls
+
+# Misc
+.DS_Store
+data/.DS_Store
+__pycache__/
+*.pyc
+outputs/
+dashboard/index_recovered.html
+diagnose_betts.py
+run_pipeline.py
+data/run_pipeline.py
+data/data_generator.py
