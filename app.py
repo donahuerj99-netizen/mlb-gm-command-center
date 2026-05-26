@@ -17,11 +17,7 @@ warnings.filterwarnings("ignore")
 
 app = Flask(__name__, static_folder="dashboard")
 
-# Load pipeline at module level so gunicorn picks it up
-import threading
-def _startup():
-    load_pipeline()
-threading.Thread(target=_startup, daemon=True).start()
+
 roster_cache = {}
 team_stats_cache = {}  # League-wide team summary stats
 
@@ -1747,6 +1743,12 @@ def get_historic_roster(team, season):
         'pitchers': pitchers,
         'total_war': round(sum(h['WAR'] for h in hitters) + sum(p['WAR'] for p in pitchers), 1),
     })
+
+# Load pipeline at module level so gunicorn picks it up
+import threading as _threading
+def _startup():
+    load_pipeline()
+_threading.Thread(target=_startup, daemon=True).start()
 
 if __name__ == "__main__":
     load_pipeline()
