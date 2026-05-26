@@ -43,7 +43,6 @@ def load_pipeline():
         print(f"Hitter pipeline loaded: {len(DATA):,} player-seasons")
         load_pitcher_pipeline()
         # Skip prewarm_cache on cloud deployment - loads on demand to save RAM
-        import os
         if os.environ.get('RENDER') != 'true':
             prewarm_cache()
     except Exception as e:
