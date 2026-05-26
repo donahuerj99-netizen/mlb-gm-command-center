@@ -1732,11 +1732,8 @@ def get_historic_roster(team, season):
         'total_war': round(sum(h['WAR'] for h in hitters) + sum(p['WAR'] for p in pitchers), 1),
     })
 
-# Load pipeline at module level so gunicorn picks it up
-import threading as _threading
-def _startup():
-    load_pipeline()
-_threading.Thread(target=_startup, daemon=True).start()
+# Load pipeline synchronously at module level
+load_pipeline()
 
 if __name__ == "__main__":
     load_pipeline()
