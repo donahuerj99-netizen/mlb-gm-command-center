@@ -42,8 +42,10 @@ def load_pipeline():
         TRAINED = bundle['TRAINED']
         print(f"Hitter pipeline loaded: {len(DATA):,} player-seasons")
         load_pitcher_pipeline()
-        # Skip prewarm_cache on cloud deployment - loads on demand to save RAM
-        if os.environ.get('RENDER') != 'true':
+        if os.environ.get('RENDER') == 'true':
+            # On Render: just load proj caches into memory, skip MLB API calls
+            load_proj_caches_only()
+        else:
             prewarm_cache()
     except Exception as e:
         import traceback
@@ -691,6 +693,31 @@ def get_live_roster(team):
 
     return jsonify({"hitters": hitters, "pitchers": pitchers, "source": "MLB Stats API 2026"})
 
+
+def load_proj_caches_only():
+    """On cloud: load proj_war caches from disk without hitting MLB API."""
+    import json, threading
+    teams = [
+        'ARI','ATL','BAL','BOS','CHC','CHW','CIN','CLE','COL','DET',
+        'HOU','KCR','LAA','LAD','MIA','MIL','MIN','NYM','NYY','OAK',
+        'PHI','PIT','SDP','SEA','SFG','STL','TBR','TEX','TOR','WSN'
+    ]
+    loaded = 0
+    for team in teams:
+        proj_path = os.path.join(os.path.dirname(__file__), 'data', f'proj_cache_{team}.json')
+        if os.path.exists(proj_path):
+            try:
+                with open(proj_path, 'r') as f:
+                    proj_map = json.load(f)
+                # Store as minimal cache entry so on-demand load skips recompute
+                roster_proj_cache[team] = proj_map
+                loaded += 1
+            except:
+                pass
+    print(f"Loaded proj caches for {loaded}/30 teams from disk")
+
+# Global proj cache (separate from live_roster_cache)
+roster_proj_cache = {}
 
 def prewarm_cache():
     """Pre-compute projections for all 30 teams in parallel."""
