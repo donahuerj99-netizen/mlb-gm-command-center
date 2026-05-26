@@ -3124,7 +3124,7 @@ window.loadChampYear = async function(year) {
   }
 
   try {
-    const r = await fetch('http://127.0.0.1:5000/api/historic_roster/' + team + '/' + year);
+    const r = await fetch('/api/historic_roster/' + team + '/' + year);
     const data = await r.json();
     champCache[year] = data;
     renderChampProfile(year, data);
@@ -3323,7 +3323,7 @@ window.preloadAllChampYears = async function() {
     if (!champCache[yr]) {
       try {
         const team = WS_WINNERS[yr];
-        const r = await fetch('http://127.0.0.1:5000/api/historic_roster/' + team + '/' + yr);
+        const r = await fetch('/api/historic_roster/' + team + '/' + yr);
         const data = await r.json();
         champCache[yr] = data;
         updateTrendBar(yr, data.hitters || []);
