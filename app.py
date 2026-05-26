@@ -16,6 +16,12 @@ import warnings
 warnings.filterwarnings("ignore")
 
 app = Flask(__name__, static_folder="dashboard")
+
+# Load pipeline at module level so gunicorn picks it up
+import threading
+def _startup():
+    load_pipeline()
+threading.Thread(target=_startup, daemon=True).start()
 roster_cache = {}
 team_stats_cache = {}  # League-wide team summary stats
 
@@ -28,28 +34,33 @@ TRAINED   = None
 def load_pipeline():
     global DATA, PROFILES, ARCH_BUNDLE, TRAINED
     print("Loading pipeline...")
+    try:
+        from models.clustering import fit_archetypes
+        from models.prediction import build_prediction_dataset, train_war_model
 
-    from models.clustering import fit_archetypes
-    from models.prediction import build_prediction_dataset, train_war_model
+        import os, pandas as pd
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "real_seasons.csv")
+        print(f"CSV path: {csv_path}")
+        print(f"CSV exists: {os.path.exists(csv_path)}")
+        if os.path.exists(csv_path):
+            print(f"Loading from CSV: {csv_path}")
+            DATA = pd.read_csv(csv_path)
+            print(f"Loaded {len(DATA):,} player-seasons from CSV")
+        else:
+            from data.scrapers import fetch_real_data
+            DATA = fetch_real_data(start_year=2000, end_year=2025)
 
-    # Load from pre-built CSV if available (faster, no XLS files needed)
-    import os, pandas as pd
-    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "real_seasons.csv")
-    if os.path.exists(csv_path):
-        print(f"Loading from CSV: {csv_path}")
-        DATA = pd.read_csv(csv_path)
-        print(f"Loaded {len(DATA):,} player-seasons from CSV")
-    else:
-        from data.scrapers import fetch_real_data
-        DATA = fetch_real_data(start_year=2000, end_year=2025)
+        PROFILES, ARCH_BUNDLE = fit_archetypes(DATA)
+        model_df, feature_cols = build_prediction_dataset(DATA, PROFILES)
+        TRAINED  = train_war_model(model_df, feature_cols)
 
-    PROFILES, ARCH_BUNDLE = fit_archetypes(DATA)
-    model_df, feature_cols = build_prediction_dataset(DATA, PROFILES)
-    TRAINED  = train_war_model(model_df, feature_cols)
-
-    print("Pipeline ready!")
-    load_pitcher_pipeline()
-    prewarm_cache()
+        print("Pipeline ready!")
+        load_pitcher_pipeline()
+        prewarm_cache()
+    except Exception as e:
+        import traceback
+        print(f"PIPELINE ERROR: {e}")
+        traceback.print_exc()
 
 
 # ── API Routes ────────────────────────────────────────────────────────────────
