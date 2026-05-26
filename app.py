@@ -29,28 +29,18 @@ TRAINED   = None
 
 def load_pipeline():
     global DATA, PROFILES, ARCH_BUNDLE, TRAINED
-    print("Loading pipeline...")
+    print("Loading pipeline from pickle...")
     try:
-        from models.clustering import fit_archetypes
-        from models.prediction import build_prediction_dataset, train_war_model
-
-        import os, pandas as pd
-        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "real_seasons.csv")
-        print(f"CSV path: {csv_path}")
-        print(f"CSV exists: {os.path.exists(csv_path)}")
-        if os.path.exists(csv_path):
-            print(f"Loading from CSV: {csv_path}")
-            DATA = pd.read_csv(csv_path)
-            print(f"Loaded {len(DATA):,} player-seasons from CSV")
-        else:
-            from data.scrapers import fetch_real_data
-            DATA = fetch_real_data(start_year=2000, end_year=2025)
-
-        PROFILES, ARCH_BUNDLE = fit_archetypes(DATA)
-        model_df, feature_cols = build_prediction_dataset(DATA, PROFILES)
-        TRAINED  = train_war_model(model_df, feature_cols)
-
-        print("Pipeline ready!")
+        import pickle
+        bundle_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "model_bundle.pkl")
+        print(f"Bundle path: {bundle_path}, exists: {os.path.exists(bundle_path)}")
+        with open(bundle_path, 'rb') as f:
+            bundle = pickle.load(f)
+        DATA = bundle['DATA']
+        PROFILES = bundle['PROFILES']
+        ARCH_BUNDLE = bundle['ARCH_BUNDLE']
+        TRAINED = bundle['TRAINED']
+        print(f"Hitter pipeline loaded: {len(DATA):,} player-seasons")
         load_pitcher_pipeline()
         prewarm_cache()
     except Exception as e:
@@ -216,24 +206,22 @@ PITCHER_TRAINED  = None
 
 def load_pitcher_pipeline():
     global PITCHER_DATA, PITCHER_PROFILES, PITCHER_BUNDLE, PITCHER_TRAINED
-    print("Loading pitcher pipeline...")
-    from models.pitcher_clustering  import fit_pitcher_archetypes
-    from models.pitcher_prediction  import build_pitcher_prediction_dataset, train_pitcher_model
-
-    import os, pandas as pd
-    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pitcher_seasons.csv")
-    if os.path.exists(csv_path):
-        print(f"Loading pitchers from CSV: {csv_path}")
-        PITCHER_DATA = pd.read_csv(csv_path)
-        print(f"Loaded {len(PITCHER_DATA):,} pitcher-seasons from CSV")
-    else:
-        from data.pitcher_scraper import fetch_pitcher_data
-        PITCHER_DATA = fetch_pitcher_data(start_year=2000, end_year=2025)
-
-    PITCHER_PROFILES, PITCHER_BUNDLE = fit_pitcher_archetypes(PITCHER_DATA)
-    model_df, feature_cols = build_pitcher_prediction_dataset(PITCHER_DATA, PITCHER_PROFILES)
-    PITCHER_TRAINED = train_pitcher_model(model_df, feature_cols)
-    print("Pitcher pipeline ready!")
+    print("Loading pitcher pipeline from pickle...")
+    try:
+        import pickle
+        bundle_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pitcher_model_bundle.pkl")
+        print(f"Pitcher bundle path: {bundle_path}, exists: {os.path.exists(bundle_path)}")
+        with open(bundle_path, 'rb') as f:
+            bundle = pickle.load(f)
+        PITCHER_DATA = bundle['PITCHER_DATA']
+        PITCHER_PROFILES = bundle['PITCHER_PROFILES']
+        PITCHER_BUNDLE = bundle['PITCHER_BUNDLE']
+        PITCHER_TRAINED = bundle['PITCHER_TRAINED']
+        print(f"Pitcher pipeline loaded: {len(PITCHER_DATA):,} pitcher-seasons")
+    except Exception as e:
+        import traceback
+        print(f"PITCHER PIPELINE ERROR: {e}")
+        traceback.print_exc()
 
 
 @app.route("/api/pitcher/<name>")
