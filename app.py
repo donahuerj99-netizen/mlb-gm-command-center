@@ -1675,9 +1675,13 @@ def get_team_needs(team):
         if grp:
             war = proj_map.get(p['name'], p.get('proj_war'))
             try:
-                war = float(war) if war not in (None, 'N/A') else 0.0
+                war = float(war) if war not in (None, 'N/A') else None
             except:
-                war = 0.0
+                war = None
+            # Unknown players (prospects/international) count as replacement level
+            # so they don't trigger false HOLE flags
+            if war is None:
+                war = LEAGUE_AVG.get(grp, 1.5) * 0.5  # half league avg = replacement
             pos_war[grp].append(war)
 
     for p in pitchers:
@@ -1685,9 +1689,11 @@ def get_team_needs(team):
         grp = 'SP' if role in ('SP', 'Starter') else 'RP'
         war = proj_map.get(p['name'], p.get('proj_war'))
         try:
-            war = float(war) if war not in (None, 'N/A') else 0.0
+            war = float(war) if war not in (None, 'N/A') else None
         except:
-            war = 0.0
+            war = None
+        if war is None:
+            war = LEAGUE_AVG.get(grp, 0.8) * 0.5
         pos_war[grp].append(war)
 
     # Calculate needs
@@ -1713,11 +1719,11 @@ def get_team_needs(team):
         if gap > 0:
             if has_hole:
                 severity = 'HOLE'
-            elif gap >= 1.5:
+            elif gap >= 1.2:
                 severity = 'CRITICAL'
-            elif gap >= 1.0:
+            elif gap >= 0.7:
                 severity = 'HIGH'
-            elif gap >= 0.5:
+            elif gap >= 0.3:
                 severity = 'MODERATE'
             else:
                 severity = 'MINOR'
