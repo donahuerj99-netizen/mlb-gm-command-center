@@ -17,7 +17,7 @@ from sklearn.model_selection import cross_val_score, GroupKFold
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-DOLLARS_PER_WAR  = 7.5
+DOLLARS_PER_WAR  = 10.5   # millions (2025-26 market rate)
 DISCOUNT_RATE    = 0.05
 
 PITCHER_INJURY_RISK = {

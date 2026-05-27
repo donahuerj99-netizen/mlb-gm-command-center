@@ -1146,7 +1146,7 @@ canvas { max-height:200px; }
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
           <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">CONTRACT VALUATION</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Fair AAV = injury-adjusted WAR x $7.5M/WAR x 5% annual inflation, discounted at 5%/year. <strong style="color:var(--green)">SIGN</strong> = surplus value. <strong style="color:var(--gold)">CAUTION</strong> = slight overpay. <strong style="color:var(--red)">AVOID</strong> = significant overpay.</p>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Fair AAV = injury-adjusted WAR x $10.5M/WAR x 5% annual inflation, discounted at 5%/year. <strong style="color:var(--green)">SIGN</strong> = surplus value. <strong style="color:var(--gold)">CAUTION</strong> = slight overpay. <strong style="color:var(--red)">AVOID</strong> = significant overpay.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
           <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">KEY FEATURES</div>
@@ -1157,7 +1157,7 @@ canvas { max-height:200px; }
           <div style="display:flex;gap:20px;margin-top:8px">
             <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">1.05</div><div style="font-size:11px;color:var(--muted)">MAE — Hitters (Yr 1)</div></div>
             <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">0.78</div><div style="font-size:11px;color:var(--muted)">MAE — Pitchers (Yr 1)</div></div>
-            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--gold)">$7.5M</div><div style="font-size:11px;color:var(--muted)">Base $/WAR</div></div>
+            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--gold)">$10.5M</div><div style="font-size:11px;color:var(--muted)">Base $/WAR</div></div>
           </div>
         </div>
       </div>
@@ -1905,8 +1905,8 @@ async function evaluateTrade() {
   const prospectWarB = prospectsB.reduce((s,p)=>s+p.war_value,0);
   const warA = playersA.reduce((s,p)=>s+p.proj_war,0) + prospectWarA;
   const warB = playersB.reduce((s,p)=>s+p.proj_war,0) + prospectWarB;
-  const fairA = playersA.reduce((s,p)=>s+p.fair_value,0) + (prospectWarA * 7.5);
-  const fairB = playersB.reduce((s,p)=>s+p.fair_value,0) + (prospectWarB * 7.5);
+  const fairA = playersA.reduce((s,p)=>s+p.fair_value,0) + (prospectWarA * 10.5);
+  const fairB = playersB.reduce((s,p)=>s+p.fair_value,0) + (prospectWarB * 10.5);
 
   // Contract salary totals (2026 salary being traded)
   function getSalary(name, yr) {
