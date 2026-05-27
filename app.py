@@ -1632,6 +1632,112 @@ BBREF_TO_COTS = {
     "LAA":"los-angeles-angels","SEA":"seattle-mariners","TEX":"texas-rangers",
 }
 
+
+@app.route("/api/team_needs/<team>")
+def get_team_needs(team):
+    """Return positional needs for a team based on roster proj WAR vs league averages."""
+    import json, os
+
+    # League average proj WAR by position group (based on our model data)
+    LEAGUE_AVG = {
+        'C':  1.8, '1B': 1.5, '2B': 2.0, '3B': 1.8,
+        'SS': 2.5, 'OF': 2.0,
+        'SP': 2.2, 'RP': 0.8
+    }
+
+    POS_GROUP = {
+        'C':'C', '1B':'1B', '2B':'2B', '3B':'3B', 'SS':'SS',
+        'LF':'OF', 'CF':'OF', 'RF':'OF', 'DH':'OF',
+        'SP':'SP', 'RP':'RP', 'CL':'RP', 'P':'RP'
+    }
+
+    # Load proj cache
+    proj_path = os.path.join(os.path.dirname(__file__), 'data', f'proj_cache_{team}.json')
+    proj_map = {}
+    if os.path.exists(proj_path):
+        with open(proj_path) as f:
+            proj_map = json.load(f)
+
+    # Get live roster
+    if team not in live_roster_cache:
+        return jsonify({"error": "Roster not loaded yet"}), 503
+
+    roster = live_roster_cache[team]
+    hitters = roster.get('hitters', [])
+    pitchers = roster.get('pitchers', [])
+
+    # Build position -> list of proj WAR
+    pos_war = {pos: [] for pos in LEAGUE_AVG}
+
+    for p in hitters:
+        raw_pos = p.get('position', '')
+        grp = POS_GROUP.get(raw_pos)
+        if grp:
+            war = proj_map.get(p['name'], p.get('proj_war'))
+            try:
+                war = float(war) if war not in (None, 'N/A') else 0.0
+            except:
+                war = 0.0
+            pos_war[grp].append(war)
+
+    for p in pitchers:
+        role = p.get('role', 'RP')
+        grp = 'SP' if role in ('SP', 'Starter') else 'RP'
+        war = proj_map.get(p['name'], p.get('proj_war'))
+        try:
+            war = float(war) if war not in (None, 'N/A') else 0.0
+        except:
+            war = 0.0
+        pos_war[grp].append(war)
+
+    # Calculate needs
+    needs = []
+    for pos, wars in pos_war.items():
+        avg = LEAGUE_AVG[pos]
+        if not wars:
+            best = 0.0
+        else:
+            # Use top 1 for C/SP (single player), top 3 for OF, top 5 for SP staff
+            if pos == 'SP':
+                best = sum(sorted(wars, reverse=True)[:5]) / 5 if wars else 0.0
+            elif pos == 'OF':
+                best = sum(sorted(wars, reverse=True)[:3]) / 3 if wars else 0.0
+            elif pos == 'RP':
+                best = sum(sorted(wars, reverse=True)[:3]) / 3 if wars else 0.0
+            else:
+                best = max(wars)
+
+        gap = avg - best
+        has_hole = best < 0.5  # no qualified player
+
+        if gap > 0:
+            if has_hole:
+                severity = 'HOLE'
+            elif gap >= 1.5:
+                severity = 'CRITICAL'
+            elif gap >= 1.0:
+                severity = 'HIGH'
+            elif gap >= 0.5:
+                severity = 'MODERATE'
+            else:
+                severity = 'MINOR'
+            needs.append({
+                'position': pos,
+                'team_war': round(best, 1),
+                'league_avg': avg,
+                'gap': round(gap, 1),
+                'severity': severity,
+                'has_hole': has_hole
+            })
+
+    # Sort by severity then gap
+    needs.sort(key=lambda x: (0 if x['severity']=='HIGH' else 1, -x['gap']))
+
+    return jsonify({
+        'team': team,
+        'needs': needs[:5]  # top 5 needs
+    })
+
 @app.route("/api/team_stats")
 def get_team_stats():
     """Return league-wide team summary stats."""
@@ -1765,7 +1871,6 @@ def get_historic_roster(team, season):
 load_pipeline()
 
 if __name__ == "__main__":
-    load_pipeline()
     print("\nDashboard running at: http://localhost:5000\n")
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
