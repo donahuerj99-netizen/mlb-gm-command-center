@@ -92,10 +92,9 @@ def get_player(name):
     # Get latest season stats
     latest = history.sort_values("season").iloc[-1]
 
-    # Project 5 years
-    n_years = 5
     contract_years = request.args.get("contract_years", 4, type=int)
     proposed_aav   = request.args.get("aav", None, type=float)
+    n_years = max(contract_years, 5)  # always project at least 5 years
 
     proj = project_player(history, TRAINED, ARCH_BUNDLE, n_years=n_years)
 
@@ -251,7 +250,8 @@ def get_pitcher(name):
     contract_years = request.args.get("contract_years", 3, type=int)
     proposed_aav   = request.args.get("aav", None, type=float)
 
-    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=5)
+    proj_years = max(contract_years, 5)  # always project at least 5 years
+    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=proj_years)
     contract = estimate_pitcher_contract(proj, contract_years, proposed_aav)
 
     current_year  = 2026

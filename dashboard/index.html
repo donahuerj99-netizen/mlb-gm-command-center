@@ -417,6 +417,10 @@ canvas { max-height:200px; }
 .fa-need-high { background:rgba(255,61,87,0.1);border-color:var(--red);color:var(--red); }
 .fa-need-moderate { background:rgba(255,165,0,0.1);border-color:#FFA500;color:#FFA500; }
 .fa-fills-need { background:rgba(0,230,118,0.15);border:1px solid var(--green);color:var(--green);border-radius:4px;padding:2px 7px;font-size:10px;font-family:"DM Mono",monospace;margin-left:6px; }
+
+/* ── FA Payroll Context ── */
+.fa-payroll-bar { background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-top:12px; }
+.fa-narrative { font-size:13px; color:var(--muted2); line-height:1.6; margin-top:10px; padding:10px 14px; background:var(--s1); border-left:3px solid var(--cyan); border-radius:0 6px 6px 0; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -1458,7 +1462,7 @@ function switchTab(tab) {
   document.getElementById('nav-'+tab).classList.add('active');
   if (tab === 'champ') { setTimeout(() => { initChampTab(); preloadAllChampYears(); }, 50); }
   if (tab === 'teamstats') loadLeagueStats();
-  if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) loadFANeeds(team); }
+  if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
   const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
   // Reset builder to offense mode when leaving lineup tab
@@ -1483,6 +1487,7 @@ function onTeamChange() {
   if (!team) return;
   loadRoster(team);
   loadFANeeds(team);
+  loadTeamPayroll(team);
 }
 
 function loadRoster(team) {
@@ -1619,6 +1624,14 @@ function renderOverlay(data) {
     ? '<span class="fa-fills-need">FILLS NEED — ' + fillsNeed.position + '</span>'
     : '';
 
+  // Payroll context and narrative (only when AAV is entered)
+  const enteredAAV = data.aav || 0;
+  const payrollContextHtml = data.showContract && enteredAAV > 0 ? renderPayrollContext(enteredAAV, contract.years) : '';
+  const narrativeText = data.showContract && enteredAAV > 0 && baseSignal !== 'ENTER AAV'
+    ? generateFANarrative(contract, fillsNeed, baseSignal, adjustedSignal, isPitcher, enteredAAV)
+    : null;
+  const narrativeHtml = narrativeText ? '<div class="fa-narrative" style="margin-bottom:16px">' + narrativeText + '</div>' : '';
+
   const retiredWarning = !career.is_active
     ? '<div class="warning-box">Last in dataset: '+career.latest_year+'. Verify current roster status.</div>' : '';
 
@@ -1672,7 +1685,7 @@ function renderOverlay(data) {
         '<div><div class="cn-val">$'+contract.fair_AAV_M+'M</div><div class="cn-lbl">Fair AAV</div></div>'+
         '<div><div class="cn-val">$'+contract.total_fair_value_M+'M</div><div class="cn-lbl">Total Fair Value</div></div>'+
       '</div>'+
-    '</div>' : '')+
+    '</div>'+payrollContextHtml+narrativeHtml : '')+
     '<div class="section-title">5-YEAR PROJECTION</div>'+
     '<table class="proj-table" style="margin-bottom:20px"><thead><tr><th>Season</th><th>Age</th><th>P10</th><th>Median</th><th>P90</th><th>Inj-Adj</th><th>Value</th></tr></thead><tbody>'+projRows+'</tbody></table>'+
     '<div class="section-title">WAR HISTORY</div>'+
@@ -1821,6 +1834,7 @@ function faSearch() {
     } else {
       document.getElementById('player-overlay').classList.add('open');
       data.showContract = true;
+      data.aav = aav ? parseFloat(aav) : 0;
       renderOverlay(data);
       document.getElementById('fa-results').style.display='block';
     }
@@ -3366,6 +3380,16 @@ window.preloadAllChampYears = async function() {
 // FA TEAM NEEDS
 // ═══════════════════════════════════════════
 let currentTeamNeeds = [];
+let currentTeamPayroll = null;
+
+async function loadTeamPayroll(team) {
+  if (!team) { currentTeamPayroll = null; return; }
+  try {
+    const r = await fetch('/api/payroll/' + team);
+    const data = await r.json();
+    if (!data.error) currentTeamPayroll = data;
+  } catch(e) {}
+}
 
 async function loadFANeeds(team) {
   if (!team) {
@@ -3450,6 +3474,91 @@ function getFASignalWithNeed(baseSignal, fillsNeed) {
   if (baseSignal === 'CAUTION') return 'SIGN';
   return baseSignal;
 }
+
+function generateFANarrative(contract, fillsNeed, baseSignal, adjustedSignal, isPitcher, aav) {
+  if (!aav || aav <= 0) return null;
+
+  const projWar = contract.projected_WAR;
+  const fairAAV = contract.fair_AAV_M;
+  const ratio = aav / fairAAV;
+  const parts = [];
+
+  // Value assessment
+  if (ratio <= 0.85) {
+    parts.push('Excellent value at ' + ratio.toFixed(2) + 'x market rate');
+  } else if (ratio <= 1.1) {
+    parts.push('Fair market value');
+  } else if (ratio <= 1.4) {
+    parts.push('Slight premium over market rate (' + ratio.toFixed(2) + 'x)');
+  } else {
+    parts.push('Significant overpay at ' + ratio.toFixed(2) + 'x market rate');
+  }
+
+  // Need context
+  if (fillsNeed) {
+    const urgency = fillsNeed.severity === 'HOLE' || fillsNeed.severity === 'CRITICAL' ? 'critical' :
+                    fillsNeed.severity === 'HIGH' ? 'clear' : 'moderate';
+    parts.push('addresses a ' + urgency + ' need at ' + fillsNeed.position);
+  } else if (currentTeamNeeds.length > 0) {
+    parts.push('does not address current positional needs');
+  }
+
+  // Payroll context
+  if (currentTeamPayroll) {
+    const LUX = 241;
+    const current2026 = currentTeamPayroll.year_totals['2026'] || 0;
+    const newPayroll = current2026 + aav;
+    const overBefore = current2026 > LUX;
+    const overAfter = newPayroll > LUX;
+
+    if (!overBefore && overAfter) {
+      parts.push('would push payroll $' + (newPayroll - LUX).toFixed(1) + 'M over luxury tax');
+    } else if (overBefore) {
+      parts.push('team already $' + (current2026 - LUX).toFixed(1) + 'M over luxury tax');
+    } else {
+      const remaining = LUX - newPayroll;
+      if (remaining < 20) {
+        parts.push('leaves only $' + remaining.toFixed(1) + 'M under luxury tax');
+      }
+    }
+  }
+
+  return parts.join(', ') + '.';
+}
+
+function renderPayrollContext(aav, years) {
+  if (!currentTeamPayroll || !aav || aav <= 0) return '';
+  
+  const LUX = 241;
+  const current = currentTeamPayroll.year_totals['2026'] || 0;
+  const newTotal = current + parseFloat(aav);
+  const overBefore = current - LUX;
+  const overAfter = newTotal - LUX;
+  const teamName = TEAM_NAMES[currentTeamPayroll.team] || currentTeamPayroll.team || 'Team';
+
+  const currentColor = current > LUX ? 'var(--red)' : 'var(--green)';
+  const newColor = newTotal > LUX ? 'var(--red)' : 'var(--green)';
+  const arrow = newTotal > current ? '▲' : '▼';
+
+  return '<div class="fa-payroll-bar">' +
+    '<div style="font-family:\"Bebas Neue\",sans-serif;font-size:12px;letter-spacing:1px;color:var(--muted);margin-bottom:10px">PAYROLL IMPACT — ' + teamName.toUpperCase() + '</div>' +
+    '<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">' +
+      '<div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">Current 2026</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:18px;color:' + currentColor + '">$' + current.toFixed(1) + 'M</div></div>' +
+      '<div style="font-size:20px;color:var(--muted)">+</div>' +
+      '<div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">This Contract</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:18px;color:var(--cyan)">$' + parseFloat(aav).toFixed(1) + 'M AAV</div></div>' +
+      '<div style="font-size:20px;color:var(--muted)">=</div>' +
+      '<div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">New Total</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:18px;color:' + newColor + '">' + arrow + ' $' + newTotal.toFixed(1) + 'M</div></div>' +
+      '<div style="margin-left:auto;text-align:right"><div style="font-size:11px;color:var(--muted);margin-bottom:2px">Lux Tax ($' + LUX + 'M)</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:18px;color:' + (overAfter > 0 ? 'var(--red)' : 'var(--green)') + '">' +
+          (overAfter > 0 ? 'OVER by $' + overAfter.toFixed(1) + 'M' : 'UNDER by $' + Math.abs(overAfter).toFixed(1) + 'M') +
+        '</div></div>' +
+    '</div>' +
+  '</div>';
+}
+
 
 </script>
 

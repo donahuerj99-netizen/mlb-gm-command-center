@@ -318,7 +318,15 @@ def estimate_contract(projections: pd.DataFrame,
     total_war_adj    = proj["war_adj"].sum()
     total_war_p50    = proj["war_p50"].sum()
     total_fair_value = proj["contract_value_M"].sum()
-    fair_aav         = total_fair_value / contract_years
+
+    # Front-weighted AAV: weight early years more heavily
+    # Teams price long deals on peak years but amortize across length
+    import numpy as np
+    actual_years = len(proj)
+    weights = np.array([1.0 / (1.08 ** i) for i in range(actual_years)])
+    weights = weights / weights.sum() * actual_years
+    weighted_val = (proj["contract_value_M"].values * weights).sum()
+    fair_aav = weighted_val / contract_years
 
     result = {
         "contract_years":    contract_years,
