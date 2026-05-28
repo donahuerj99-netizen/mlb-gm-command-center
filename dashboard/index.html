@@ -1463,6 +1463,7 @@ function switchTab(tab) {
   if (tab === 'champ') { setTimeout(() => { initChampTab(); preloadAllChampYears(); }, 50); }
   if (tab === 'teamstats') loadLeagueStats();
   if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
+  if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); }
   const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
   // Reset builder to offense mode when leaving lineup tab
@@ -1488,6 +1489,14 @@ function onTeamChange() {
   loadRoster(team);
   loadFANeeds(team);
   loadTeamPayroll(team);
+  // Sync trade team A
+  const tradeA = document.getElementById('trade-team-a');
+  if (tradeA && tradeA.value !== team) {
+    tradeA.value = team;
+    if (document.getElementById('tab-trade').classList.contains('active')) {
+      loadTradeRoster('a');
+    }
+  }
 }
 
 function loadRoster(team) {
@@ -2006,33 +2015,86 @@ async function evaluateTrade() {
     </div>`;
   }
 
+  // Get team stats for context
+  const stats = await loadTeamStats();
+  const teamAStats = stats ? stats[teamA] : null;
+  const teamBStats = stats ? stats[teamB] : null;
+  const teamAProjWins = teamAStats ? teamAStats.proj_wins : null;
+  const teamBProjWins = teamBStats ? teamBStats.proj_wins : null;
+
+  // Check needs filled for team A
+  let needsFilled = 0;
+  if (currentTeamNeeds && currentTeamNeeds.length > 0) {
+    [...tradeSelB].forEach(name => {
+      const ptype = tradePlayerTypes[name] === 'pitcher' ? 'SP' : null;
+      if (ptype && currentTeamNeeds.find(n => n.position === ptype)) needsFilled++;
+      // Check hitter positions from playersB data
+      const playerData = playersB.find(p => p.name === name);
+      if (playerData && !ptype) {
+        const grp = getPositionGroup ? null : null; // simplified - count if any hitter need exists
+        if (currentTeamNeeds.find(n => ['C','1B','2B','3B','SS','OF'].includes(n.position))) needsFilled += 0.5;
+      }
+    });
+    needsFilled = Math.round(needsFilled);
+  }
+
+  // Generate grades
+  const gradeA = generateTradeGrade({
+    warReceived: warB, warGiven: warA,
+    fairReceived: fairB, fairGiven: fairA,
+    salReceived: salB, salGiven: salA,
+    newPayroll: newPayrollA,
+    teamProjWins: teamAProjWins,
+    partnerProjWins: teamBProjWins,
+    needsFilled
+  });
+  const gradeB = generateTradeGrade({
+    warReceived: warA, warGiven: warB,
+    fairReceived: fairA, fairGiven: fairB,
+    salReceived: salA, salGiven: salB,
+    newPayroll: newPayrollB,
+    teamProjWins: teamBProjWins,
+    partnerProjWins: teamAProjWins,
+    needsFilled: 0
+  });
+
+  function gradeBox(grade, color) {
+    return '<div style="display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:10px;background:' + color + '22;border:2px solid ' + color + ';font-family:\"Bebas Neue\",sans-serif;font-size:34px;color:' + color + ';letter-spacing:2px">' + grade + '</div>';
+  }
+
   const result = document.getElementById('trade-result');
   result.classList.add('show');
   document.getElementById('trade-result-grid').innerHTML =
-    '<div class="tr-team '+(aWins?'winner':'loser')+'">'+
+    '<div class="tr-team">'+
       '<div class="tr-label">RECEIVES</div>'+
-      '<div class="tr-team-name">'+(TEAM_NAMES[teamA]||teamA||'Team A')+'</div>'+
-      '<div class="tr-war" style="color:'+(aWins?'var(--green)':'var(--muted2)')+'">'+warB.toFixed(1)+' WAR projected</div>'+
-      '<div class="tr-verdict" style="color:'+(aWins?'var(--green)':'var(--red)')+'">'+( aWins?'WINS TRADE':'LOSES TRADE')+'</div>'+
-      '<div class="tr-players">'+[...tradeSelB].map(n=>`<div style="margin-bottom:4px"><strong>${n}</strong>${contractTag(n)}</div>`).join('')+
-      prospectsB.map(p=>`<div style="margin-bottom:4px"><strong>${p.name}</strong><div style="font-size:10px;color:#FFD700">PROSPECT · ${p.pos} · ${p.level} · ${TIER_LABELS[p.tier]} · ${p.war_value}W</div></div>`).join('')+
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'+
+        gradeBox(gradeA.grade, gradeA.gradeColor)+
+        '<div><div class="tr-team-name">'+(TEAM_NAMES[teamA]||teamA||'Team A')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted)">'+(teamAProjWins||'')+' proj wins</div></div>'+
       '</div>'+
-      '<div style="font-family:DM Mono,monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairB.toFixed(1)+'M</div>'+
-      '<div style="font-family:DM Mono,monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salB.toFixed(1)+'M</div>'+
-      (dolPerWarA>0?'<div style="font-family:DM Mono,monospace;font-size:12px;color:var(--cyan)">$'+dolPerWarA.toFixed(1)+'M/WAR</div>':'')+
+      '<div style="font-size:12px;color:var(--muted2);margin-bottom:10px;padding:8px 10px;background:var(--s1);border-left:3px solid '+gradeA.gradeColor+';border-radius:0 6px 6px 0;line-height:1.5">'+gradeA.narrative+'</div>'+
+      '<div class="tr-war" style="color:'+(warB>=warA?'var(--green)':'var(--muted2)')+'">'+warB.toFixed(1)+' WAR proj</div>'+
+      '<div class="tr-players">'+[...tradeSelB].map(n=>'<div style="margin-bottom:4px"><strong>'+n+'</strong>'+contractTag(n)+'</div>').join('')+
+      prospectsB.map(p=>'<div style="margin-bottom:4px"><strong>'+p.name+'</strong><div style="font-size:10px;color:var(--muted)">'+p.tier+' • '+p.level+' • '+p.pos+'</div></div>').join('')+
+      '</div>'+
+      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairB.toFixed(1)+'M</div>'+
+      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salB.toFixed(1)+'M</div>'+
       payrollImpact(payrollA, newPayrollA)+
     '</div>'+
-    '<div class="tr-team '+(!aWins?'winner':'loser')+'">'+
+    '<div class="tr-team">'+
       '<div class="tr-label">RECEIVES</div>'+
-      '<div class="tr-team-name">'+(TEAM_NAMES[teamB]||teamB||'Team B')+'</div>'+
-      '<div class="tr-war" style="color:'+(!aWins?'var(--green)':'var(--muted2)')+'">'+warA.toFixed(1)+' WAR projected</div>'+
-      '<div class="tr-verdict" style="color:'+(!aWins?'var(--green)':'var(--red)')+'">'+(!aWins?'WINS TRADE':'LOSES TRADE')+'</div>'+
-      '<div class="tr-players">'+[...tradeSelA].map(n=>`<div style="margin-bottom:4px"><strong>${n}</strong>${contractTag(n)}</div>`).join('')+
-      prospectsA.map(p=>`<div style="margin-bottom:4px"><strong>${p.name}</strong><div style="font-size:10px;color:#FFD700">PROSPECT · ${p.pos} · ${p.level} · ${TIER_LABELS[p.tier]} · ${p.war_value}W</div></div>`).join('')+
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'+
+        gradeBox(gradeB.grade, gradeB.gradeColor)+
+        '<div><div class="tr-team-name">'+(TEAM_NAMES[teamB]||teamB||'Team B')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted)">'+(teamBProjWins||'')+' proj wins</div></div>'+
       '</div>'+
-      '<div style="font-family:DM Mono,monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairA.toFixed(1)+'M</div>'+
-      '<div style="font-family:DM Mono,monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salA.toFixed(1)+'M</div>'+
-      (dolPerWarB>0?'<div style="font-family:DM Mono,monospace;font-size:12px;color:var(--cyan)">$'+dolPerWarB.toFixed(1)+'M/WAR</div>':'')+
+      '<div style="font-size:12px;color:var(--muted2);margin-bottom:10px;padding:8px 10px;background:var(--s1);border-left:3px solid '+gradeB.gradeColor+';border-radius:0 6px 6px 0;line-height:1.5">'+gradeB.narrative+'</div>'+
+      '<div class="tr-war" style="color:'+(warA>=warB?'var(--green)':'var(--muted2)')+'">'+warA.toFixed(1)+' WAR proj</div>'+
+      '<div class="tr-players">'+[...tradeSelA].map(n=>'<div style="margin-bottom:4px"><strong>'+n+'</strong>'+contractTag(n)+'</div>').join('')+
+      prospectsA.map(p=>'<div style="margin-bottom:4px"><strong>'+p.name+'</strong><div style="font-size:10px;color:var(--muted)">'+p.tier+' • '+p.level+' • '+p.pos+'</div></div>').join('')+
+      '</div>'+
+      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairA.toFixed(1)+'M</div>'+
+      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salA.toFixed(1)+'M</div>'+
       payrollImpact(payrollB, newPayrollB)+
     '</div>';
   result.scrollIntoView({behavior:'smooth'});
@@ -3474,6 +3536,117 @@ function getFASignalWithNeed(baseSignal, fillsNeed) {
   if (baseSignal === 'CAUTION') return 'SIGN';
   return baseSignal;
 }
+
+// ═══════════════════════════════════════════
+// TRADE GRADE ENGINE
+// ═══════════════════════════════════════════
+let teamStatsCache = null;
+
+async function loadTeamStats() {
+  if (teamStatsCache) return teamStatsCache;
+  try {
+    const r = await fetch('/api/team_stats');
+    const data = await r.json();
+    teamStatsCache = {};
+    (data.teams || []).forEach(t => { teamStatsCache[t.team] = t; });
+  } catch(e) {}
+  return teamStatsCache;
+}
+
+function getTeamTier(projWins) {
+  if (!projWins) return 'unknown';
+  if (projWins >= 90) return 'elite';
+  if (projWins >= 86) return 'contender';
+  if (projWins >= 82) return 'fringe';
+  if (projWins >= 76) return 'rebuilding';
+  return 'tanking';
+}
+
+function generateTradeGrade(params) {
+  const { warReceived, warGiven, fairReceived, fairGiven, salReceived, salGiven,
+          newPayroll, teamProjWins, partnerProjWins, needsFilled } = params;
+
+  const LUX = 241;
+  let score = 50; // start at C
+  const notes = [];
+
+  // 1. WAR VALUE (35 pts max)
+  const warDiff = warReceived - warGiven;
+  const warPct = warGiven > 0 ? warDiff / warGiven : 0;
+  if (warDiff >= 3) { score += 25; notes.push('significant WAR upgrade'); }
+  else if (warDiff >= 1.5) { score += 15; notes.push('clear WAR improvement'); }
+  else if (warDiff >= 0.5) { score += 8; notes.push('slight WAR improvement'); }
+  else if (warDiff >= -0.5) { score += 2; notes.push('roughly even on player value'); }
+  else if (warDiff >= -1.5) { score -= 10; notes.push('moderate WAR concession'); }
+  else if (warDiff >= -3) { score -= 20; notes.push('significant WAR concession'); }
+  else { score -= 30; notes.push('major WAR concession'); }
+
+  // 2. CONTRACT EFFICIENCY (25 pts max)
+  const valDiff = fairReceived - fairGiven;
+  if (valDiff >= 20) { score += 20; notes.push('excellent contract value'); }
+  else if (valDiff >= 8) { score += 12; notes.push('good contract value'); }
+  else if (valDiff >= 0) { score += 5; }
+  else if (valDiff >= -15) { score -= 8; notes.push('slight contract overpay'); }
+  else { score -= 18; notes.push('significant contract premium'); }
+
+  // 3. TEAM CONTEXT (25 pts max)
+  const tier = getTeamTier(teamProjWins);
+  const partnerTier = getTeamTier(partnerProjWins);
+
+  if (tier === 'elite' || tier === 'contender') {
+    if (warDiff >= 1) { score += 20; notes.push('win-now move for a contender'); }
+    else if (warDiff >= -0.5) { score += 8; notes.push('maintains contention window'); }
+    else if (warDiff < -1.5) { score -= 25; notes.push('contender surrendering significant talent'); }
+    // Salary relief on contender only good if under lux
+    if (salGiven > salReceived && newPayroll < LUX) { score += 5; notes.push('gains payroll flexibility'); }
+    if (newPayroll > LUX + 30) { score -= 10; notes.push('deep luxury tax territory'); }
+  } else if (tier === 'fringe') {
+    if (warDiff >= 1 && newPayroll < LUX) { score += 15; notes.push('push toward contention'); }
+    else if (warDiff < 0 && salGiven > salReceived) { score += 10; notes.push('strategic payroll relief'); }
+  } else {
+    // Rebuilder
+    if (warDiff < 0 && salGiven > salReceived) { score += 20; notes.push('productive salary dump'); }
+    if (fairReceived > fairGiven * 1.2) { score += 15; notes.push('acquiring surplus value'); }
+    if (warDiff > 2) { score -= 10; notes.push('win-now spending in rebuild mode'); }
+  }
+
+  // 4. NEED FIT (15 pts max)
+  if (needsFilled >= 2) { score += 12; notes.push('fills multiple positional needs'); }
+  else if (needsFilled === 1) { score += 6; notes.push('addresses a positional need'); }
+
+  // 5. PAYROLL MODIFIERS
+  if (newPayroll > LUX && salReceived > salGiven) {
+    score -= 8;
+    notes.push('increases luxury tax burden');
+  }
+  if (newPayroll < LUX && salGiven > salReceived + 5) {
+    score += 5;
+  }
+
+  // Convert score to letter grade
+  score = Math.max(0, Math.min(100, score));
+  let grade, gradeColor;
+  if (score >= 93) { grade = 'A+'; gradeColor = '#00e676'; }
+  else if (score >= 87) { grade = 'A'; gradeColor = '#00e676'; }
+  else if (score >= 80) { grade = 'A-'; gradeColor = '#44ff88'; }
+  else if (score >= 75) { grade = 'B+'; gradeColor = '#44ff88'; }
+  else if (score >= 68) { grade = 'B'; gradeColor = '#FFD700'; }
+  else if (score >= 62) { grade = 'B-'; gradeColor = '#FFD700'; }
+  else if (score >= 55) { grade = 'C+'; gradeColor = '#FFA500'; }
+  else if (score >= 48) { grade = 'C'; gradeColor = '#FFA500'; }
+  else if (score >= 40) { grade = 'C-'; gradeColor = '#FF6B35'; }
+  else if (score >= 32) { grade = 'D'; gradeColor = '#ff6b6b'; }
+  else { grade = 'F'; gradeColor = '#ff3d57'; }
+
+  // Generate narrative
+  const tierLabel = tier === 'elite' ? 'an elite team' : tier === 'contender' ? 'a contender' :
+                    tier === 'fringe' ? 'a fringe contender' : tier === 'rebuilding' ? 'a rebuilding team' : 'a rebuilding team';
+  let narrative = 'As ' + tierLabel + ' (' + (teamProjWins||'?') + ' proj wins): ';
+  narrative += notes.slice(0, 3).join(', ') + '.';
+
+  return { grade, gradeColor, score, narrative };
+}
+
 
 function generateFANarrative(contract, fillsNeed, baseSignal, adjustedSignal, isPitcher, aav) {
   if (!aav || aav <= 0) return null;
