@@ -1412,7 +1412,18 @@ canvas { max-height:200px; }
   <div class="overlay-panel" id="overlay-panel">
     <div class="overlay-close">
       <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:11px;color:var(--muted)">PLAYER DETAIL</div>
-      <button class="close-btn" onclick="closeOverlayBtn()">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="compare-btn" onclick="initComparison()" style="background:rgba(0,212,255,0.1);border:1px solid var(--cyan);color:var(--cyan);border-radius:6px;padding:4px 12px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;display:none">COMPARE</button>
+        <button id="clear-compare-btn" onclick="clearComparison()" style="background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 12px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;display:none">CLEAR</button>
+        <button class="close-btn" onclick="closeOverlayBtn()">&#x2715;</button>
+      </div>
+    </div>
+    <div id="compare-search-panel" style="display:none;padding:12px 20px;background:var(--s2);border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:8px">COMPARE WITH:</div>
+      <div style="position:relative">
+        <input id="compare-input" type="text" placeholder="Search any player..." style="width:100%;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--fg);font-size:13px" oninput="compareAutocomplete()" autocomplete="off">
+        <div id="compare-ac" style="position:absolute;top:100%;left:0;right:0;background:var(--s2);border:1px solid var(--border);border-radius:8px;z-index:100;display:none;max-height:200px;overflow-y:auto"></div>
+      </div>
     </div>
     <div class="overlay-body" id="overlay-body">
       <div class="spinner-wrap"><div class="spinner"></div>Loading...</div>
@@ -1646,6 +1657,14 @@ function openPlayer(name, forceType, showContract=false) {
 function renderOverlay(data) {
   const isPitcher = data.type === 'pitcher';
   const {name, archetype, career, war_history, projection, contract} = data;
+  
+  // Store for comparison and show Compare button
+  comparisonPlayer1 = data;
+  comparisonPlayer2 = null;
+  document.getElementById('compare-btn').style.display = 'inline-block';
+  document.getElementById('clear-compare-btn').style.display = 'none';
+  document.getElementById('compare-search-panel').style.display = 'none';
+  document.getElementById('compare-input').value = '';
   const archColor = ARCH_COLORS[archetype.archetype_label] || '#94a3b8';
   const surplus = contract.surplus_value_M;
   // Base signal
@@ -3997,6 +4016,280 @@ function renderHistoricTable() {
 
   document.getElementById('ls-hist-loading').style.display = 'none';
   document.getElementById('ls-hist-wrap').style.display = 'block';
+}
+
+
+
+// ═══════════════════════════════════════════
+// PLAYER COMPARISON
+// ═══════════════════════════════════════════
+let comparisonPlayer1 = null;  // pinned player data
+let comparisonPlayer2 = null;  // second player data
+
+function initComparison() {
+  if (!comparisonPlayer1) return;
+  document.getElementById('compare-search-panel').style.display = 'block';
+  document.getElementById('compare-btn').style.display = 'none';
+  document.getElementById('clear-compare-btn').style.display = 'inline-block';
+  document.getElementById('compare-input').focus();
+}
+
+function clearComparison() {
+  comparisonPlayer2 = null;
+  document.getElementById('compare-search-panel').style.display = 'none';
+  document.getElementById('compare-btn').style.display = 'inline-block';
+  document.getElementById('clear-compare-btn').style.display = 'none';
+  document.getElementById('compare-input').value = '';
+  document.getElementById('compare-ac').style.display = 'none';
+  // Re-render single player
+  if (comparisonPlayer1) renderOverlay(comparisonPlayer1);
+}
+
+function compareAutocomplete() {
+  const q = document.getElementById('compare-input').value.toLowerCase();
+  const ac = document.getElementById('compare-ac');
+  if (q.length < 2) { ac.style.display='none'; return; }
+  const src = comparisonPlayer1?.type === 'pitcher' ? allPitchers : allPlayers;
+  const matches = src.filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { ac.style.display='none'; return; }
+  ac.innerHTML = matches.map(n =>
+    '<div class="ac-item" onclick="selectComparePlayer(\'' + n.replace(/'/g, "\\'") + '\')">'+n+'</div>'
+  ).join('');
+  ac.style.display = 'block';
+}
+
+function selectComparePlayer(name) {
+  document.getElementById('compare-input').value = name;
+  document.getElementById('compare-ac').style.display = 'none';
+  document.getElementById('overlay-body').innerHTML = '<div class="spinner-wrap"><div class="spinner"></div>Loading comparison...</div>';
+  
+  const isPitcher = comparisonPlayer1?.type === 'pitcher';
+  const endpoint = isPitcher ? 'pitcher' : 'player';
+  fetch('/api/' + endpoint + '/' + encodeURIComponent(name) + '?contract_years=4')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        // Try the other type
+        const alt = isPitcher ? 'player' : 'pitcher';
+        return fetch('/api/' + alt + '/' + encodeURIComponent(name) + '?contract_years=4').then(r => r.json());
+      }
+      return data;
+    })
+    .then(data => {
+      if (data.error) return;
+      comparisonPlayer2 = data;
+      renderComparisonOverlay(comparisonPlayer1, comparisonPlayer2);
+    });
+}
+
+function statWinner(v1, v2, higherIsBetter=true) {
+  if (v1 === null || v2 === null || v1 === undefined || v2 === undefined) return 'tie';
+  if (Math.abs(v1 - v2) < 0.01) return 'tie';
+  return higherIsBetter ? (v1 > v2 ? 'left' : 'right') : (v1 < v2 ? 'left' : 'right');
+}
+
+function statCell(val, winner, side, fmt) {
+  const isWinner = winner === side;
+  const isTie = winner === 'tie';
+  const color = isTie ? 'var(--muted2)' : (isWinner ? 'var(--green)' : 'var(--red)');
+  const weight = isWinner ? 'font-weight:600;' : '';
+  let display;
+  if (val === null || val === undefined) { display = '—'; }
+  else if (fmt === 'pct') { display = (val*100).toFixed(1)+'%'; }
+  else if (fmt === '3d') { display = typeof val === 'number' ? val.toFixed(3) : val; }
+  else if (fmt === '1d') { display = typeof val === 'number' ? val.toFixed(1) : val; }
+  else { display = val; }
+  const align = side === 'left' ? 'right' : 'left';
+  return '<td style="text-align:'+align+';padding:7px 12px;font-family:DM Mono,monospace;font-size:13px;color:'+color+';'+weight+'">'+display+'</td>';
+}
+
+function renderComparisonOverlay(p1, p2) {
+  const ip1 = p1.type === 'pitcher';
+  const ip2 = p2.type === 'pitcher';
+
+  const c1 = p1.career, c2 = p2.career;
+  const proj1 = p1.projection?.[0], proj2 = p2.projection?.[0];
+
+  // Build WAR history - supports both calendar year and career year alignment
+  const isActive1 = p1.career?.is_active !== false;
+  const isActive2 = p2.career?.is_active !== false;
+
+  const seasonWar1 = {}, seasonWar2 = {};
+  (p1.war_history||[]).forEach(h => { if (!seasonWar1[h.season] || h.WAR > seasonWar1[h.season]) seasonWar1[h.season] = h.WAR; });
+  (p2.war_history||[]).forEach(h => { if (!seasonWar2[h.season] || h.WAR > seasonWar2[h.season]) seasonWar2[h.season] = h.WAR; });
+
+  const projSeasons1 = [], projSeasons2 = [];
+  if (isActive1) (p1.projection||[]).forEach(p => { seasonWar1[p.season] = p.war_p50; projSeasons1.push(p.season); });
+  if (isActive2) (p2.projection||[]).forEach(p => { seasonWar2[p.season] = p.war_p50; projSeasons2.push(p.season); });
+
+  // Calendar year mode
+  const allCalYears = [...new Set([...Object.keys(seasonWar1), ...Object.keys(seasonWar2)])].map(Number).sort();
+  const seasons1sorted = Object.keys(seasonWar1).map(Number).sort();
+  const seasons2sorted = Object.keys(seasonWar2).map(Number).sort();
+  const lastHist1 = Math.max(...seasons1sorted.filter(s => !projSeasons1.includes(s)));
+  const lastHist2 = Math.max(...seasons2sorted.filter(s => !projSeasons2.includes(s)));
+
+  // Career year mode
+  const maxLen = Math.max(seasons1sorted.length, seasons2sorted.length);
+  const careerLabels = Array.from({length: maxLen}, (_, i) => 'Yr ' + (i+1));
+  const histSeasons1 = seasons1sorted.filter(s => !projSeasons1.includes(s));
+  const histSeasons2 = seasons2sorted.filter(s => !projSeasons2.includes(s));
+
+  function buildCareerData(seasonsArr, warMap, projSeasons, isActive) {
+    const actual = careerLabels.map((_, i) => {
+      const s = seasonsArr[i]; return (s && !projSeasons.includes(s)) ? warMap[s] : null; });
+    const proj = careerLabels.map((_, i) => {
+      const s = seasonsArr[i]; return (s && projSeasons.includes(s)) ? warMap[s] : null; });
+    const lastIdx = seasonsArr.filter(s => !projSeasons.includes(s)).length - 1;
+    if (isActive && actual[lastIdx] != null) proj[lastIdx] = actual[lastIdx];
+    return {actual, proj};
+  }
+
+  const c1d = buildCareerData(seasons1sorted, seasonWar1, projSeasons1, isActive1);
+  const c2d = buildCareerData(seasons2sorted, seasonWar2, projSeasons2, isActive2);
+
+  // Store globally for toggle
+  window._compChartData = {
+    calLabels: allCalYears,
+    careerLabels,
+    p1name: p1.name, p2name: p2.name,
+    cal: {
+      d1a: allCalYears.map(y => !projSeasons1.includes(y) ? (seasonWar1[y]??null) : null),
+      d1p: allCalYears.map(y => (projSeasons1.includes(y)||(y===lastHist1&&isActive1)) ? (seasonWar1[y]??null) : null),
+      d2a: allCalYears.map(y => !projSeasons2.includes(y) ? (seasonWar2[y]??null) : null),
+      d2p: allCalYears.map(y => (projSeasons2.includes(y)||(y===lastHist2&&isActive2)) ? (seasonWar2[y]??null) : null),
+    },
+    career: { d1a: c1d.actual, d1p: c1d.proj, d2a: c2d.actual, d2p: c2d.proj }
+  };
+  window._compMode = "career";
+
+  // Stat rows
+  const hitterStats = [
+    ['Latest WAR', c1.latest_WAR, c2.latest_WAR, true, '1d'],
+    ['Career WAR', c1.career_WAR, c2.career_WAR, true, '1d'],
+    ['Peak WAR', c1.peak_WAR||c1.career_WAR, c2.peak_WAR||c2.career_WAR, true, '1d'],
+    ['Proj Y1 WAR', proj1?.war_p50, proj2?.war_p50, true, '1d'],
+    ['wRC+', c1.wRC_plus, c2.wRC_plus, true, ''],
+    ['OBP', c1.OBP, c2.OBP, true, '3d'],
+    ['SLG', c1.SLG, c2.SLG, true, '3d'],
+    ['ISO', c1.ISO, c2.ISO, true, '3d'],
+    ['BB%', c1.BB_pct, c2.BB_pct, true, '1d'],
+    ['K%', c1.K_pct, c2.K_pct, false, '1d'],
+    ['Def', c1.Def, c2.Def, true, '1d'],
+    ['Sprint Spd', c1.sprint_speed, c2.sprint_speed, true, '1d'],
+  ];
+
+  const pitcherStats = [
+    ['Latest WAR', c1.latest_WAR, c2.latest_WAR, true, '1d'],
+    ['Career WAR', c1.career_WAR, c2.career_WAR, true, '1d'],
+    ['Proj Y1 WAR', proj1?.war_p50, proj2?.war_p50, true, '1d'],
+    ['ERA', c1.ERA, c2.ERA, false, '2'],
+    ['FIP', c1.FIP, c2.FIP, false, '2'],
+    ['WHIP', c1.WHIP, c2.WHIP, false, '3d'],
+    ['ERA+', c1.ERA_plus, c2.ERA_plus, true, ''],
+    ['K/9', c1.SO9, c2.SO9, true, '1d'],
+    ['BB/9', c1.BB9, c2.BB9, false, '1d'],
+    ['K%', c1.K_pct, c2.K_pct, true, '1d'],
+  ];
+
+  const stats = (ip1 || ip2) ? pitcherStats : hitterStats;
+  const arch1Color = ARCH_COLORS[p1.archetype?.archetype_label] || '#94a3b8';
+  const arch2Color = ARCH_COLORS[p2.archetype?.archetype_label] || '#94a3b8';
+
+  const statsRows = stats.map(([label, v1, v2, hib, fmt]) => {
+    const w = statWinner(v1, v2, hib);
+    return '<tr>' +
+      statCell(v1, w, 'left', fmt) +
+      '<td style="text-align:center;padding:7px 8px;font-size:11px;color:var(--muted);font-family:\"DM Mono\",monospace;white-space:nowrap">' + label + '</td>' +
+      statCell(v2, w, 'right', fmt) +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('overlay-body').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;margin-bottom:16px">' +
+      // Player 1 header
+      '<div style="padding:16px;border-right:1px solid var(--border)">' +
+        '<div style="font-family:\"Bebas Neue\",sans-serif;font-size:24px;letter-spacing:1px">' + p1.name + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' +
+          '<span class="rc-tag rc-pos">' + (ip1 ? c1.role : c1.position) + '</span>' +
+          '<span class="rc-tag rc-arch" style="color:' + arch1Color + ';border-color:' + arch1Color + '40;background:' + arch1Color + '15">' + (p1.archetype?.archetype_label||'') + '</span>' +
+          '<span class="rc-tag">Age ' + c1.age + '</span>' +
+        '</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:28px;color:var(--cyan);margin-top:8px">' + c1.latest_WAR + '<span style="font-size:12px;color:var(--muted);margin-left:4px">' + c1.latest_year + ' WAR</span></div>' +
+      '</div>' +
+      // VS
+      '<div style="display:flex;align-items:center;padding:0 16px;font-family:\"Bebas Neue\",sans-serif;font-size:20px;color:var(--muted)">VS</div>' +
+      // Player 2 header
+      '<div style="padding:16px;border-left:1px solid var(--border)">' +
+        '<div style="font-family:\"Bebas Neue\",sans-serif;font-size:24px;letter-spacing:1px">' + p2.name + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">' +
+          '<span class="rc-tag rc-pos">' + (ip2 ? c2.role : c2.position) + '</span>' +
+          '<span class="rc-tag rc-arch" style="color:' + arch2Color + ';border-color:' + arch2Color + '40;background:' + arch2Color + '15">' + (p2.archetype?.archetype_label||'') + '</span>' +
+          '<span class="rc-tag">Age ' + c2.age + '</span>' +
+        '</div>' +
+        '<div style="font-family:\"DM Mono\",monospace;font-size:28px;color:var(--cyan);margin-top:8px">' + c2.latest_WAR + '<span style="font-size:12px;color:var(--muted);margin-left:4px">' + c2.latest_year + ' WAR</span></div>' +
+      '</div>' +
+    '</div>' +
+    // WAR History Chart with toggle + player name legend
+    '<div style="padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between">' +
+      '<div style="display:flex;gap:16px;font-size:12px">' +
+        '<span style="border-bottom:2px solid rgba(0,212,255,0.8);padding-bottom:2px;color:var(--fg)">' + p1.name + '</span>' +
+        '<span style="border-bottom:2px solid rgba(167,139,250,0.8);padding-bottom:2px;color:var(--fg)">' + p2.name + '</span>' +
+      '</div>' +
+      '<button id="comp-mode-btn" onclick="toggleCompMode()" style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:10px;font-family:monospace;cursor:pointer">BY CALENDAR YEAR</button>' +
+    '</div>' +
+    '<div style="margin-bottom:16px;padding:0 16px"><canvas id="compare-chart" height="120"></canvas></div>' +
+    // Stats table
+    '<div style="padding:0 8px">' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<tbody>' + statsRows + '</tbody>' +
+      '</table>' +
+    '</div>';
+
+  // Render chart
+  setTimeout(() => {
+    const ctx = document.getElementById('compare-chart');
+    if (!ctx) return;
+    if (window._compareChart) window._compareChart.destroy();
+    window._compareChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: window._compChartData.careerLabels,
+        datasets: buildCompDatasets(window._compChartData.career)
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  }, 100);
+}
+
+function buildCompDatasets(d) {
+  const cd = window._compChartData;
+  return [
+    { label: cd.p1name, data: d.d1a, borderColor: 'rgba(0,212,255,0.8)', backgroundColor: 'rgba(0,212,255,0.1)', tension: 0.3, pointRadius: 3, spanGaps: false },
+    { label: cd.p1name+' proj', data: d.d1p, borderColor: 'rgba(0,212,255,0.4)', borderDash: [5,5], backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, spanGaps: false },
+    { label: cd.p2name, data: d.d2a, borderColor: 'rgba(167,139,250,0.8)', backgroundColor: 'rgba(167,139,250,0.1)', tension: 0.3, pointRadius: 3, spanGaps: false },
+    { label: cd.p2name+' proj', data: d.d2p, borderColor: 'rgba(167,139,250,0.4)', borderDash: [5,5], backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, spanGaps: false },
+  ];
+}
+
+function toggleCompMode() {
+  window._compMode = window._compMode === 'career' ? 'cal' : 'career';
+  const cd = window._compChartData;
+  const isCareer = window._compMode === 'career';
+  const btn = document.getElementById("comp-mode-btn");
+  if (btn) btn.textContent = isCareer ? 'BY CALENDAR YEAR' : 'BY CAREER YEAR';
+  if (!window._compareChart) return;
+  window._compareChart.data.labels = isCareer ? cd.careerLabels : cd.calLabels;
+  const d = isCareer ? cd.career : cd.cal;
+  window._compareChart.data.datasets = buildCompDatasets(d);
+  window._compareChart.update();
 }
 
 </script>
