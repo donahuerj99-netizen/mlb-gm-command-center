@@ -1774,6 +1774,25 @@ def get_historic_standings(year):
     # Reverse map: MLB API team ID → our abbreviation
     TEAM_MAP = {v: k for k, v in BBREF_TO_MLB_ID.items()}
 
+    # Franchise aliases - map old CSV codes to current codes for WAR lookup
+    FRANCHISE_ALIASES = {
+        'ANA': 'LAA',  # Anaheim Angels → LA Angels
+        'FLA': 'MIA',  # Florida Marlins → Miami Marlins
+        'MON': 'WSN',  # Montreal Expos → Washington Nationals
+        'TBD': 'TBR',  # Tampa Bay Devil Rays → Rays
+        'CAL': 'LAA',  # California Angels
+    }
+
+    def get_war(abbr, war_dict):
+        """Get WAR for a team, checking aliases if not found."""
+        if abbr in war_dict:
+            return war_dict[abbr]
+        # Check if any alias maps to this abbr
+        for old_code, new_code in FRANCHISE_ALIASES.items():
+            if new_code == abbr and old_code in war_dict:
+                return war_dict[old_code]
+        return 0
+
     # Get WAR data from our CSV
     hitter_war = DATA[DATA['season']==year].groupby('team')['WAR'].sum().to_dict()
     pitcher_war = PITCHER_DATA[PITCHER_DATA['season']==year].groupby('team')['WAR'].sum().to_dict() if PITCHER_DATA is not None else {}
@@ -1789,8 +1808,8 @@ def get_historic_standings(year):
             gb = t.get('gamesBack', '-')
             playoff = t.get('clinched', False) or t.get('divisionChamp', False)
             
-            h_war = round(hitter_war.get(abbr, 0), 1)
-            p_war = round(pitcher_war.get(abbr, 0), 1)
+            h_war = round(get_war(abbr, hitter_war), 1)
+            p_war = round(get_war(abbr, pitcher_war), 1)
             total_war = round(h_war + p_war, 1)
             
             teams.append({
