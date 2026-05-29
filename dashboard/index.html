@@ -875,7 +875,7 @@ canvas { max-height:200px; }
       <!-- Roster Panel -->
       <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px">
         <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">ROSTER</div>
-        <select id="lineup-team" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:&#39;DM Mono&#39;,monospace;font-size:11px;outline:none;margin-bottom:10px;cursor:pointer" onchange="loadLineupRoster()"><option value="">Select team...</option><option value="ARI">Arizona Diamondbacks</option><option value="ATL">Atlanta Braves</option><option value="BAL">Baltimore Orioles</option><option value="BOS">Boston Red Sox</option><option value="CHC">Chicago Cubs</option><option value="CHW">Chicago White Sox</option><option value="CIN">Cincinnati Reds</option><option value="CLE">Cleveland Guardians</option><option value="COL">Colorado Rockies</option><option value="DET">Detroit Tigers</option><option value="HOU">Houston Astros</option><option value="KCR">Kansas City Royals</option><option value="LAA">Los Angeles Angels</option><option value="LAD">Los Angeles Dodgers</option><option value="MIA">Miami Marlins</option><option value="MIL">Milwaukee Brewers</option><option value="MIN">Minnesota Twins</option><option value="NYM">New York Mets</option><option value="NYY">New York Yankees</option><option value="OAK">Oakland Athletics</option><option value="PHI">Philadelphia Phillies</option><option value="PIT">Pittsburgh Pirates</option><option value="SDP">San Diego Padres</option><option value="SFG">San Francisco Giants</option><option value="SEA">Seattle Mariners</option><option value="STL">St. Louis Cardinals</option><option value="TBR">Tampa Bay Rays</option><option value="TEX">Texas Rangers</option><option value="TOR">Toronto Blue Jays</option><option value="WSN">Washington Nationals</option></select>
+        <!-- lineup-team select replaced by global team selector -->
         <div id="lineup-roster-list" style="max-height:400px;overflow-y:auto;margin-bottom:12px">
           <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Select a team above</div>
         </div>
@@ -894,21 +894,16 @@ canvas { max-height:200px; }
         <div style="position:relative;width:340px;height:340px;margin:0 auto 20px">
           <!-- Diamond SVG background -->
           <svg viewBox="0 0 340 340" style="position:absolute;inset:0;width:100%;height:100%">
-            <polygon points="170,20 320,170 170,320 20,170" fill="rgba(0,212,255,0.03)" stroke="rgba(0,212,255,0.15)" stroke-width="1.5"></polygon>
-            <line x1="170" y1="20" x2="170" y2="320" stroke="rgba(0,212,255,0.06)" stroke-width="1"></line>
-            <line x1="20" y1="170" x2="320" y2="170" stroke="rgba(0,212,255,0.06)" stroke-width="1"></line>
-            <!-- Base paths -->
-            <rect x="161" y="11" width="18" height="18" fill="rgba(0,212,255,0.15)" stroke="rgba(0,212,255,0.4)" stroke-width="1" transform="rotate(45,170,20)"></rect>
-            <rect x="311" y="161" width="18" height="18" fill="rgba(0,212,255,0.15)" stroke="rgba(0,212,255,0.4)" stroke-width="1" transform="rotate(45,320,170)"></rect>
-            <rect x="161" y="311" width="18" height="18" fill="rgba(0,212,255,0.15)" stroke="rgba(0,212,255,0.4)" stroke-width="1" transform="rotate(45,170,320)"></rect>
-            <rect x="11" y="161" width="18" height="18" fill="rgba(0,212,255,0.15)" stroke="rgba(0,212,255,0.4)" stroke-width="1" transform="rotate(45,20,170)"></rect>
+            <polygon points="170,105 265,200 170,295 75,200" fill="rgba(0,212,255,0.03)" stroke="rgba(0,212,255,0.15)" stroke-width="1.5"></polygon>
+            <line x1="170" y1="105" x2="170" y2="295" stroke="rgba(0,212,255,0.06)" stroke-width="1"></line>
+            <line x1="75" y1="200" x2="265" y2="200" stroke="rgba(0,212,255,0.06)" stroke-width="1"></line>
             <!-- Pitcher mound -->
-            <circle cx="170" cy="170" r="10" fill="rgba(0,212,255,0.1)" stroke="rgba(0,212,255,0.3)" stroke-width="1"></circle>
+            <circle cx="170" cy="200" r="10" fill="rgba(0,212,255,0.1)" stroke="rgba(0,212,255,0.3)" stroke-width="1"></circle>
           </svg>
 
           <!-- Position slots: x,y as percentage -->
           <!-- P -->
-          <div class="diamond-slot" id="slot-P" style="left:50%;top:50%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;P&#39;)">
+          <div class="diamond-slot" id="slot-P" style="left:50%;top:59%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;P&#39;)">
             <div class="slot-label">P</div><div class="slot-name" id="slot-name-P">—</div>
           </div>
           <!-- C -->
@@ -916,35 +911,35 @@ canvas { max-height:200px; }
             <div class="slot-label">C</div><div class="slot-name" id="slot-name-C">—</div>
           </div>
           <!-- 1B -->
-          <div class="diamond-slot" id="slot-1B" style="left:83%;top:50%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;1B&#39;)">
+          <div class="diamond-slot" id="slot-1B" style="left:78%;top:59%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;1B&#39;)">
             <div class="slot-label">1B</div><div class="slot-name" id="slot-name-1B">—</div>
           </div>
           <!-- 2B -->
-          <div class="diamond-slot" id="slot-2B" style="left:65%;top:35%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;2B&#39;)">
+          <div class="diamond-slot" id="slot-2B" style="left:62%;top:41%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;2B&#39;)">
             <div class="slot-label">2B</div><div class="slot-name" id="slot-name-2B">—</div>
           </div>
           <!-- 3B -->
-          <div class="diamond-slot" id="slot-3B" style="left:17%;top:50%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;3B&#39;)">
+          <div class="diamond-slot" id="slot-3B" style="left:22%;top:59%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;3B&#39;)">
             <div class="slot-label">3B</div><div class="slot-name" id="slot-name-3B">—</div>
           </div>
           <!-- SS -->
-          <div class="diamond-slot" id="slot-SS" style="left:35%;top:35%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;SS&#39;)">
+          <div class="diamond-slot" id="slot-SS" style="left:38%;top:41%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;SS&#39;)">
             <div class="slot-label">SS</div><div class="slot-name" id="slot-name-SS">—</div>
           </div>
           <!-- LF -->
-          <div class="diamond-slot" id="slot-LF" style="left:17%;top:17%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;LF&#39;)">
+          <div class="diamond-slot" id="slot-LF" style="left:16%;top:22%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;LF&#39;)">
             <div class="slot-label">LF</div><div class="slot-name" id="slot-name-LF">—</div>
           </div>
           <!-- CF -->
-          <div class="diamond-slot" id="slot-CF" style="left:50%;top:8%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;CF&#39;)">
+          <div class="diamond-slot" id="slot-CF" style="left:50%;top:10%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;CF&#39;)">
             <div class="slot-label">CF</div><div class="slot-name" id="slot-name-CF">—</div>
           </div>
           <!-- RF -->
-          <div class="diamond-slot" id="slot-RF" style="left:83%;top:17%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;RF&#39;)">
+          <div class="diamond-slot" id="slot-RF" style="left:84%;top:22%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;RF&#39;)">
             <div class="slot-label">RF</div><div class="slot-name" id="slot-name-RF">—</div>
           </div>
           <!-- DH -->
-          <div class="diamond-slot" id="slot-DH" style="left:50%;top:96%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;DH&#39;)">
+          <div class="diamond-slot" id="slot-DH" style="left:50%;top:95%;transform:translate(-50%,-50%)" onclick="openSlot(&#39;DH&#39;)">
             <div class="slot-label">DH</div><div class="slot-name" id="slot-name-DH">—</div>
           </div>
         </div>
@@ -974,47 +969,47 @@ canvas { max-height:200px; }
       <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px">
         <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">BATTING ORDER</div>
         <div id="lineup-card">
-          <div class="lineup-row" id="lineup-row-1" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(1)">
+          <div class="lineup-row" id="lineup-row-1" draggable="true" ondragstart="lineupDragStart(event,1)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,1)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(1)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">1</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-1">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-1">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-1"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-2" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(2)">
+          <div class="lineup-row" id="lineup-row-2" draggable="true" ondragstart="lineupDragStart(event,2)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,2)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(2)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">2</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-2">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-2">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-2"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-3" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(3)">
+          <div class="lineup-row" id="lineup-row-3" draggable="true" ondragstart="lineupDragStart(event,3)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,3)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(3)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">3</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-3">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-3">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-3"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-4" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(4)">
+          <div class="lineup-row" id="lineup-row-4" draggable="true" ondragstart="lineupDragStart(event,4)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,4)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(4)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">4</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-4">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-4">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-4"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-5" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(5)">
+          <div class="lineup-row" id="lineup-row-5" draggable="true" ondragstart="lineupDragStart(event,5)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,5)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(5)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">5</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-5">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-5">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-5"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-6" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(6)">
+          <div class="lineup-row" id="lineup-row-6" draggable="true" ondragstart="lineupDragStart(event,6)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,6)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(6)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">6</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-6">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-6">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-6"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-7" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(7)">
+          <div class="lineup-row" id="lineup-row-7" draggable="true" ondragstart="lineupDragStart(event,7)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,7)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(7)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">7</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-7">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-7">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-7"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-8" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(8)">
+          <div class="lineup-row" id="lineup-row-8" draggable="true" ondragstart="lineupDragStart(event,8)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,8)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(8)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">8</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-8">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-8">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-8"></div>
           </div>
-          <div class="lineup-row" id="lineup-row-9" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(9)">
+          <div class="lineup-row" id="lineup-row-9" draggable="true" ondragstart="lineupDragStart(event,9)" ondragover="lineupDragOver(event)" ondrop="lineupDrop(event,9)" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--s2);cursor:pointer" onclick="openBattingSlot(9)">
             <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:20px;color:var(--muted);width:20px;text-align:center">9</div>
             <div style="flex:1"><div style="font-size:13px;font-weight:500" id="lineup-name-9">—</div><div style="font-size:10px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace" id="lineup-pos-9">Click to assign</div></div>
             <div style="font-family:&#39;DM Mono&#39;,monospace;font-size:12px;color:var(--muted2)" id="lineup-war-9"></div>
@@ -1153,31 +1148,31 @@ canvas { max-height:200px; }
     <div id="mcontent-model" style="display:block">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">DATA FOUNDATION</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Trained on <strong style="color:var(--text)">18,056 player-seasons</strong> spanning 2000-2025 from Baseball Reference, covering 2,184 position players and 2,504 pitchers. Includes batting, advanced, and fielding statistics.</p>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">DATA FOUNDATION</div>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Trained on <strong style="color:var(--text)">~20,000 player-seasons</strong> spanning 2000-2025 from Baseball Reference — <strong style="color:var(--text)">10,067 hitter</strong> and <strong style="color:var(--text)">9,909 pitcher</strong> seasons covering 2,268 position players and 2,504 pitchers. 2020 COVID season scaled to 162-game equivalent.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">PREDICTION ENSEMBLE</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Three models averaged: <strong style="color:var(--text)">Gradient Boosting</strong>, <strong style="color:var(--text)">Random Forest</strong>, and <strong style="color:var(--text)">Ridge Regression</strong>. GroupKFold cross-validation prevents data leakage across player careers.</p>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">PREDICTION ENSEMBLE</div>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Three models averaged: <strong style="color:var(--text)">Gradient Boosting</strong>, <strong style="color:var(--text)">Random Forest</strong>, and <strong style="color:var(--text)">Ridge Regression</strong>. GroupKFold cross-validation prevents data leakage. Separate <strong style="color:var(--text)">archetype-specific models</strong> trained per player class for more accurate aging curves.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">CONFIDENCE INTERVALS</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Bootstrap sampling (50 iterations) generates <strong style="color:var(--text)">P10/P50/P90 bands</strong>. Injury adjustments reduce projected WAR by archetype-specific risk factors by age band.</p>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">CONFIDENCE INTERVALS</div>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Bootstrap sampling (<strong style="color:var(--text)">200 iterations</strong>) generates P10/P50/P90 bands. Injury adjustments reduce projected WAR by archetype-specific risk factors by age band. Elite player corrections applied empirically from multi-year backtests.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">CONTRACT VALUATION</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Fair AAV = injury-adjusted WAR x $10.5M/WAR x 5% annual inflation, discounted at 5%/year. <strong style="color:var(--green)">SIGN</strong> = surplus value. <strong style="color:var(--gold)">CAUTION</strong> = slight overpay. <strong style="color:var(--red)">AVOID</strong> = significant overpay.</p>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">CONTRACT VALUATION</div>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Fair AAV uses <strong style="color:var(--text)">front-weighted pricing</strong> (8% discount rate) so long deals are priced on peak years. Base rate: <strong style="color:var(--text)">$10.5M/WAR</strong> with 5% annual inflation. Letter grades (A–F) factor in contract value, positional need, team payroll context, and projected wins.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">KEY FEATURES</div>
-          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Top predictors: current WAR, 3-year WAR average, WAR trajectory, age, archetype, wRC+, FIP (pitchers), Rtot/Rdrs defensive runs saved, sprint speed. Recent seasons weighted 3x vs older data.</p>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">KEY FEATURES</div>
+          <p style="font-size:13px;color:var(--muted2);line-height:1.7">Top predictors: <strong style="color:var(--text)">current WAR, peak WAR, top-3 season avg, 5-year avg, WAR trajectory, age, archetype</strong>, wRC+, ISO, OBP, SLG, sprint speed, Def/Rtot, service years. Archetype &times; WAR interaction terms capture elite player retention patterns.</p>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px">
-          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:10px">MODEL ACCURACY</div>
+          <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--cyan);margin-bottom:8px">MODEL ACCURACY</div>
           <div style="display:flex;gap:20px;margin-top:8px">
-            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">1.05</div><div style="font-size:11px;color:var(--muted)">MAE — Hitters (Yr 1)</div></div>
-            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">0.78</div><div style="font-size:11px;color:var(--muted)">MAE — Pitchers (Yr 1)</div></div>
-            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--gold)">$10.5M</div><div style="font-size:11px;color:var(--muted)">Base $/WAR</div></div>
+            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">1.05</div><div style="font-size:10px;color:var(--muted);margin-top:3px">MAE — Hitters (Yr 1)</div></div>
+            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--cyan)">0.78</div><div style="font-size:10px;color:var(--muted);margin-top:3px">MAE — Pitchers (Yr 1)</div></div>
+            <div><div style="font-family:&#39;DM Mono&#39;,monospace;font-size:22px;color:var(--gold)">$10.5M</div><div style="font-size:10px;color:var(--muted);margin-top:3px">Base $/WAR</div></div>
           </div>
         </div>
       </div>
@@ -1465,6 +1460,7 @@ function switchTab(tab) {
   if (tab === 'teamstats') loadLeagueStats();
   if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
   if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); }
+  if (tab === 'lineup') { loadLineupRoster(); }
   const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
   // Reset builder to offense mode when leaving lineup tab
@@ -1491,6 +1487,7 @@ function onTeamChange() {
   loadFANeeds(team);
   loadTeamPayroll(team);
   loadTeamStats(); // preload for FA grade
+  if (document.getElementById('tab-lineup').classList.contains('active')) loadLineupRoster();
   // Sync trade team A
   const tradeA = document.getElementById('trade-team-a');
   if (tradeA && tradeA.value !== team) {
@@ -2348,8 +2345,8 @@ function populateLineupTeamSelect() {
 }
 populateLineupTeamSelect();
 
-function loadLineupRoster() {
-  const team = document.getElementById('lineup-team').value;
+function loadLineupRoster(teamOverride) {
+  const team = teamOverride || document.getElementById('global-team').value;
   if (!team) return;
   const list = document.getElementById('lineup-roster-list');
   list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Loading...</div>';
@@ -2440,6 +2437,23 @@ function assignToActiveSlot(name, pos) {
     if(slotEl) slotEl.classList.add('filled');
     document.querySelectorAll('.diamond-slot').forEach(s=>s.style.boxShadow='');
     activeSlot=null;
+    // Auto-populate next available batting slot (skip P slot, DH goes in lineup)
+    if (pos !== 'P') {
+      // Check if player already in lineup
+      const alreadyIn = Object.values(lineupOrder).some(p=>p&&p.name===name);
+      if (!alreadyIn) {
+        // Find next empty batting slot
+        for (let i=1; i<=9; i++) {
+          if (!lineupOrder[i]) {
+            lineupOrder[i]=player;
+            document.getElementById('lineup-name-'+i).textContent=name;
+            document.getElementById('lineup-pos-'+i).textContent=pos+' · '+(player.archetype||'');
+            document.getElementById('lineup-war-'+i).textContent=typeof player.proj_war==='number'?player.proj_war+'W':'';
+            break;
+          }
+        }
+      }
+    }
   }
   if (activeBatSlot) {
     lineupOrder[activeBatSlot]=player;
@@ -2465,6 +2479,44 @@ function updateLineupTotals() {
   document.getElementById('total-def').textContent=(totDef>0?'+':'')+totDef;
   const gradeEl=document.getElementById('total-grade');
   gradeEl.textContent=grade; gradeEl.style.color=gradeColor;
+}
+
+// ── Drag-to-reorder lineup ──
+let dragSrcRow = null;
+function lineupDragStart(e, n) {
+  dragSrcRow = n;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function lineupDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+}
+function lineupDrop(e, n) {
+  e.preventDefault();
+  if (dragSrcRow === null || dragSrcRow === n) return;
+  // Swap
+  const tmp = lineupOrder[dragSrcRow];
+  lineupOrder[dragSrcRow] = lineupOrder[n];
+  lineupOrder[n] = tmp;
+  // Re-render all rows
+  for (let i=1; i<=9; i++) {
+    const p = lineupOrder[i];
+    const nameEl = document.getElementById('lineup-name-'+i);
+    const posEl = document.getElementById('lineup-pos-'+i);
+    const warEl = document.getElementById('lineup-war-'+i);
+    if (p) {
+      nameEl.textContent = p.name;
+      posEl.textContent = (p.position||'') + ' · ' + (p.archetype||'');
+      warEl.textContent = typeof p.proj_war==='number' ? p.proj_war+'W' : '';
+    } else {
+      nameEl.textContent = '—';
+      posEl.textContent = 'Drag here or click to assign';
+      warEl.textContent = '';
+    }
+  }
+  updateLineupTotals();
+  dragSrcRow = null;
 }
 
 function clearLineup() {
