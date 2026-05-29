@@ -713,12 +713,19 @@ canvas { max-height:200px; }
 
   <!-- LEAGUE STATS TAB -->
   <div class="tab-content" id="tab-teamstats">
-    <div style="margin-bottom:20px">
-      <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:4px">LEAGUE STATS</div>
-      <div style="color:var(--muted);font-size:13px">Team-by-team projected WAR, wins, payroll efficiency · click any column to sort</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:4px">LEAGUE STATS</div>
+        <div style="color:var(--muted);font-size:13px" id="ls-subtitle">Team-by-team projected WAR, wins, payroll efficiency</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="player-toggle active" id="ls-view-proj" onclick="setLeagueView('proj')">2026 PROJECTIONS</button>
+        <button class="player-toggle" id="ls-view-hist" onclick="setLeagueView('hist')">HISTORIC</button>
+        <select id="ls-year-select" style="display:none;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--fg);font-family:'DM Mono',monospace;font-size:12px" onchange="loadHistoricStandings()"><option value="2025" selected>2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="2021">2021</option><option value="2020">2020</option><option value="2019">2019</option><option value="2018">2018</option><option value="2017">2017</option><option value="2016">2016</option><option value="2015">2015</option><option value="2014">2014</option><option value="2013">2013</option><option value="2012">2012</option><option value="2011">2011</option><option value="2010">2010</option><option value="2009">2009</option><option value="2008">2008</option><option value="2007">2007</option><option value="2006">2006</option><option value="2005">2005</option><option value="2004">2004</option><option value="2003">2003</option><option value="2002">2002</option><option value="2001">2001</option><option value="2000">2000</option></select>
+      </div>
     </div>
 
-    <div class="ls-controls">
+    <div class="ls-controls" id="ls-proj-controls">
       <span style="font-size:11px;color:var(--muted);font-family:&#39;DM Mono&#39;,monospace">SORT BY:</span>
       <button class="ls-sort-btn active" onclick="sortLeague(&#39;total_war&#39;)">Total WAR</button>
       <button class="ls-sort-btn" onclick="sortLeague(&#39;proj_wins&#39;)">Proj Wins</button>
@@ -727,6 +734,29 @@ canvas { max-height:200px; }
       <button class="ls-sort-btn" onclick="sortLeague(&#39;avg_fip&#39;)">FIP</button>
       <button class="ls-sort-btn" onclick="sortLeague(&#39;payroll&#39;)">Payroll</button>
       <button class="ls-sort-btn" onclick="sortLeague(&#39;dollar_per_war&#39;)">$/WAR</button>
+    </div>
+
+    <!-- Historic Standings Section -->
+    <div id="ls-hist-section" style="display:none">
+      <div id="ls-hist-loading" style="color:var(--muted);font-family:'DM Mono',monospace;font-size:13px;padding:40px 0;text-align:center">Select a year to load historic standings</div>
+      <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;font-family:'DM Mono',monospace">
+        <span><span style="display:inline-block;width:12px;height:12px;background:rgba(255,215,0,0.15);border:1px solid var(--gold);border-radius:2px;margin-right:4px;vertical-align:middle"></span>World Series Winner</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:rgba(0,230,118,0.1);border:1px solid var(--green);border-radius:2px;margin-right:4px;vertical-align:middle"></span>Playoff Team</span>
+      </div>
+      <div id="ls-hist-wrap" style="display:none">
+        <table class="ls-table" id="ls-hist-table">
+          <thead><tr>
+            <th>#</th><th>Team</th>
+            <th onclick="sortHistoric('wins')">W</th>
+            <th onclick="sortHistoric('losses')">L</th>
+            <th onclick="sortHistoric('win_pct')">W%</th>
+            <th onclick="sortHistoric('total_war')">Total WAR</th>
+            <th onclick="sortHistoric('hit_war')">Hit WAR</th>
+            <th onclick="sortHistoric('pitch_war')">Pitch WAR</th>
+          </tr></thead>
+          <tbody id="ls-hist-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="ls-loading" class="ls-loading">Loading team stats... (visit teams in the roster tab to populate)</div>
@@ -1944,12 +1974,23 @@ async function evaluateTrade() {
   const teamB = document.getElementById('trade-team-b').value;
 
   // Fetch WAR projections
-  async function getWAR(name) {
+  async function getWAR(name, contractYears) {
     const pType = tradePlayerTypes[name]||'hitter';
     const endpoint = pType==='pitcher'?'pitcher':'player';
-    const r = await fetch('/api/'+endpoint+'/'+encodeURIComponent(name)+'?contract_years=3');
+    const yrs = contractYears || 3;
+    const r = await fetch('/api/'+endpoint+'/'+encodeURIComponent(name)+'?contract_years='+yrs);
     const d = await r.json();
     return {name, proj_war:d.contract?.projected_WAR||0, fair_value:d.contract?.total_fair_value_M||0};
+  }
+
+  // Helper: get remaining contract years from contractData
+  function getRemainingYears(name, contractData) {
+    const cd = contractData[name];
+    if (!cd || !cd.contract) return 3;
+    const endYear = cd.contract.end_year;
+    if (!endYear) return 3;
+    const remaining = endYear - 2025;
+    return Math.max(1, Math.min(remaining, 10));
   }
 
   // Fetch contract data for all players
@@ -1958,10 +1999,12 @@ async function evaluateTrade() {
   const contractUrl = '/api/trade_contracts?' +
     allNames.map((n,i) => `names=${encodeURIComponent(n)}&teams=${encodeURIComponent(allTeams[i])}`).join('&');
 
-  const [playersA, playersB, contractData] = await Promise.all([
-    Promise.all([...tradeSelA].map(getWAR)),
-    Promise.all([...tradeSelB].map(getWAR)),
-    fetch(contractUrl).then(r=>r.json()),
+  // Fetch contract data first so we can use remaining years for WAR projection
+  const contractData = await fetch(contractUrl).then(r=>r.json());
+
+  const [playersA, playersB] = await Promise.all([
+    Promise.all([...tradeSelA].map(n => getWAR(n, getRemainingYears(n, contractData)))),
+    Promise.all([...tradeSelB].map(n => getWAR(n, getRemainingYears(n, contractData)))),
   ]);
 
   // Include prospects in WAR totals
@@ -3874,6 +3917,87 @@ function renderPayrollContext(aav, years) {
   '</div>';
 }
 
+
+
+
+// ═══════════════════════════════════════════
+// HISTORIC LEAGUE STATS
+// ═══════════════════════════════════════════
+let currentLeagueView = 'proj';
+let historicData = [];
+let historicSortCol = 'wins';
+let historicSortAsc = false;
+
+function setLeagueView(view) {
+  currentLeagueView = view;
+  document.getElementById('ls-view-proj').classList.toggle('active', view === 'proj');
+  document.getElementById('ls-view-hist').classList.toggle('active', view === 'hist');
+  document.getElementById('ls-proj-controls').style.display = view === 'proj' ? '' : 'none';
+  document.getElementById('ls-loading').style.display = view === 'proj' ? '' : 'none';
+  document.getElementById('ls-table-wrap').style.display = view === 'proj' ? '' : 'none';
+  document.getElementById('ls-hist-section').style.display = view === 'hist' ? '' : 'none';
+  document.getElementById('ls-year-select').style.display = view === 'hist' ? '' : 'none';
+  if (view === 'proj') {
+    document.getElementById('ls-subtitle').textContent = 'Team-by-team projected WAR, wins, payroll efficiency';
+    loadLeagueStats();
+  } else {
+    document.getElementById('ls-subtitle').textContent = 'Historical team standings and WAR by season';
+    const yr = document.getElementById('ls-year-select').value;
+    if (yr) loadHistoricStandings();
+  }
+}
+
+async function loadHistoricStandings() {
+  const year = document.getElementById('ls-year-select').value;
+  if (!year) return;
+  
+  document.getElementById('ls-hist-loading').textContent = 'Loading ' + year + ' standings...';
+  document.getElementById('ls-hist-loading').style.display = 'block';
+  document.getElementById('ls-hist-wrap').style.display = 'none';
+
+  try {
+    const r = await fetch('/api/historic_standings/' + year);
+    const data = await r.json();
+    if (data.error) { document.getElementById('ls-hist-loading').textContent = 'Error: ' + data.error; return; }
+    historicData = data.teams;
+    renderHistoricTable();
+  } catch(e) {
+    document.getElementById('ls-hist-loading').textContent = 'Failed to load standings.';
+  }
+}
+
+function sortHistoric(col) {
+  if (historicSortCol === col) historicSortAsc = !historicSortAsc;
+  else { historicSortCol = col; historicSortAsc = false; }
+  renderHistoricTable();
+}
+
+function renderHistoricTable() {
+  const sorted = [...historicData].sort((a,b) => {
+    const av = a[historicSortCol] ?? 0;
+    const bv = b[historicSortCol] ?? 0;
+    return historicSortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+  });
+
+  const tbody = document.getElementById('ls-hist-tbody');
+  tbody.innerHTML = sorted.map((t, i) => {
+    const rowStyle = t.ws_winner ? 'background:rgba(255,215,0,0.08);' : (t.made_playoffs ? 'background:rgba(0,230,118,0.05);' : '');
+    const nameStyle = t.ws_winner ? 'color:var(--gold);font-weight:600' : (t.made_playoffs ? 'color:var(--green)' : '');
+    return '<tr style="' + rowStyle + '">' +
+      '<td>' + (i+1) + '</td>' +
+      '<td style="' + nameStyle + '">' + (TEAM_NAMES[t.team] || t.name) + '</td>' +
+      '<td style="color:var(--fg);font-weight:500">' + t.wins + '</td>' +
+      '<td style="color:var(--muted)">' + t.losses + '</td>' +
+      '<td style="color:var(--muted2)">' + (t.win_pct*1000|0)/10 + '%</td>' +
+      '<td style="color:var(--cyan)">' + t.total_war + '</td>' +
+      '<td style="color:var(--muted2)">' + t.hit_war + '</td>' +
+      '<td style="color:var(--muted2)">' + t.pitch_war + '</td>' +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('ls-hist-loading').style.display = 'none';
+  document.getElementById('ls-hist-wrap').style.display = 'block';
+}
 
 </script>
 

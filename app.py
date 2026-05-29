@@ -588,7 +588,7 @@ def get_live_roster(team):
                             hist = find_player_in_data(DATA, p['name'])
                             if not hist.empty:
                                 proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
-                                p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
+                                p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                             else:
                                 p['proj_war'] = 'N/A'
                         except:
@@ -600,7 +600,7 @@ def get_live_roster(team):
                             hist = find_player_in_data(PITCHER_DATA, p['name'])
                             if not hist.empty:
                                 proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
-                                p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
+                                p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                             else:
                                 p['proj_war'] = 'N/A'
                         except:
@@ -855,7 +855,7 @@ def prewarm_cache():
                         hist = find_player_in_data(DATA, p['name'])
                         if not hist.empty:
                             proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
-                            p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
+                            p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                         else:
                             p['proj_war'] = 'N/A'
                     except:
@@ -871,7 +871,7 @@ def prewarm_cache():
                         hist = find_player_in_data(PITCHER_DATA, p['name'])
                         if not hist.empty:
                             proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
-                            p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
+                            p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                         else:
                             p['proj_war'] = 'N/A'
                     except:
@@ -1745,6 +1745,72 @@ def get_team_needs(team):
         'team': team,
         'needs': needs[:5]  # top 5 needs
     })
+
+
+@app.route("/api/historic_standings/<int:year>")
+def get_historic_standings(year):
+    """Get actual standings + WAR data for a given season."""
+    import urllib.request, ssl, json as _json
+    
+    ctx = ssl.create_default_context()
+    
+    # Get standings from MLB API
+    url = f"https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season={year}&standingsTypes=regularSeason"
+    try:
+        with urllib.request.urlopen(url, timeout=10, context=ctx) as r:
+            standings_data = _json.loads(r.read())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    # WS winners by year
+    WS_WINNERS = {
+        2000:'NYY',2001:'ARI',2002:'ANA',2003:'FLA',2004:'BOS',
+        2005:'CHW',2006:'STL',2007:'BOS',2008:'PHI',2009:'NYY',
+        2010:'SFG',2011:'STL',2012:'SFG',2013:'BOS',2014:'SFG',
+        2015:'KCR',2016:'CHC',2017:'HOU',2018:'BOS',2019:'WSN',
+        2020:'LAD',2021:'ATL',2022:'HOU',2023:'TEX',2024:'LAD',2025:'LAD'
+    }
+    
+    # Reverse map: MLB API team ID → our abbreviation
+    TEAM_MAP = {v: k for k, v in BBREF_TO_MLB_ID.items()}
+
+    # Get WAR data from our CSV
+    hitter_war = DATA[DATA['season']==year].groupby('team')['WAR'].sum().to_dict()
+    pitcher_war = PITCHER_DATA[PITCHER_DATA['season']==year].groupby('team')['WAR'].sum().to_dict() if PITCHER_DATA is not None else {}
+
+    teams = []
+    for division in standings_data.get('records', []):
+        div_name = division.get('division', {}).get('name', '')
+        for t in division.get('teamRecords', []):
+            name = t['team']['name']
+            abbr = TEAM_MAP.get(t['team']['id'], '')
+            wins = t.get('wins', 0)
+            losses = t.get('losses', 0)
+            gb = t.get('gamesBack', '-')
+            playoff = t.get('clinched', False) or t.get('divisionChamp', False)
+            
+            h_war = round(hitter_war.get(abbr, 0), 1)
+            p_war = round(pitcher_war.get(abbr, 0), 1)
+            total_war = round(h_war + p_war, 1)
+            
+            teams.append({
+                'team': abbr,
+                'name': name,
+                'division': div_name,
+                'wins': wins,
+                'losses': losses,
+                'win_pct': round(wins/(wins+losses), 3) if (wins+losses) > 0 else 0,
+                'games_back': gb,
+                'hit_war': h_war,
+                'pitch_war': p_war,
+                'total_war': total_war,
+                'ws_winner': WS_WINNERS.get(year) == abbr,
+                'made_playoffs': playoff,
+            })
+    
+    # Sort by wins
+    teams.sort(key=lambda x: x['wins'], reverse=True)
+    return jsonify({'year': year, 'teams': teams})
 
 @app.route("/api/team_stats")
 def get_team_stats():
