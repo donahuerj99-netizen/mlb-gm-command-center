@@ -1793,9 +1793,14 @@ def get_historic_standings(year):
                 return war_dict[old_code]
         return 0
 
-    # Get WAR data from our CSV
-    hitter_war = DATA[DATA['season']==year].groupby('team')['WAR'].sum().to_dict()
-    pitcher_war = PITCHER_DATA[PITCHER_DATA['season']==year].groupby('team')['WAR'].sum().to_dict() if PITCHER_DATA is not None else {}
+    # Get WAR data from our CSV — deduplicate first (some seasons have duplicate rows)
+    hitters_yr = DATA[DATA['season']==year].drop_duplicates(subset=['name','team','season'])
+    hitter_war = hitters_yr.groupby('team')['WAR'].sum().to_dict()
+    if PITCHER_DATA is not None:
+        pitchers_yr = PITCHER_DATA[PITCHER_DATA['season']==year].drop_duplicates(subset=['name','team','season'])
+        pitcher_war = pitchers_yr.groupby('team')['WAR'].sum().to_dict()
+    else:
+        pitcher_war = {}
 
     teams = []
     for division in standings_data.get('records', []):
