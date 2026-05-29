@@ -39,6 +39,7 @@ INJURY_RISK_BY_AGE  = {      # fraction of WAR lost to injury by age band
 
 PREDICTION_FEATURES = [
     "age", "WAR", "WAR_prev", "WAR_3yr_avg", "WAR_delta",
+    "WAR_5yr_avg", "peak_WAR", "WAR_top3_avg",
     "ISO", "BB_pct", "K_pct", "wRC_plus", "Def", "BsR",
     "OBP", "SLG", "sprint_speed", "service_years",
     "contact_rate", "power_speed", "bmi",
@@ -63,6 +64,30 @@ def build_prediction_dataset(df: pd.DataFrame,
 
     # Keep only rows where WAR_next exists (not last season)
     model_df = merged.dropna(subset=["WAR_next"] + PREDICTION_FEATURES).copy()
+
+    # Keep archetype_label and archetype_id for archetype-specific model training
+    if "archetype_label" not in model_df.columns and "archetype_label" in merged.columns:
+        model_df["archetype_label"] = merged["archetype_label"]
+    if "archetype_id" not in model_df.columns and "archetype_id" in merged.columns:
+        model_df["archetype_id"] = merged["archetype_id"]
+
+    # Add archetype × WAR interaction features
+    # These teach the model that elite archetypes maintain high WAR better
+    elite_archs = ['Franchise Cornerstone', 'Two-Way Superstar', 'Two-Way Threat']
+    power_archs = ['High-K Power Threat', 'Emerging Superstar']
+    
+    model_df["is_elite_arch"] = model_df["archetype_label"].isin(elite_archs).astype(float)
+    model_df["is_power_arch"] = model_df["archetype_label"].isin(power_archs).astype(float)
+    
+    # Key interaction: elite archetype × high WAR → strong retention signal
+    model_df["elite_x_war"] = model_df["is_elite_arch"] * model_df["WAR"]
+    model_df["elite_x_peak"] = model_df["is_elite_arch"] * model_df["peak_WAR"]
+    model_df["elite_x_top3"] = model_df["is_elite_arch"] * model_df["WAR_top3_avg"]
+    model_df["power_x_war"] = model_df["is_power_arch"] * model_df["WAR"]
+
+    interaction_cols = ["is_elite_arch", "is_power_arch", 
+                        "elite_x_war", "elite_x_peak", "elite_x_top3", "power_x_war"]
+    all_features = all_features + interaction_cols
 
     return model_df, all_features
 
@@ -120,11 +145,28 @@ def train_war_model(model_df: pd.DataFrame,
         "importance": gb_model.feature_importances_,
     }).sort_values("importance", ascending=False)
 
+    # Store arch label→id mappings for interaction feature computation
+    elite_arch_labels = ['Franchise Cornerstone', 'Two-Way Superstar', 'Two-Way Threat']
+    power_arch_labels = ['High-K Power Threat', 'Emerging Superstar']
+
+    # Build arch_id sets from model_df if available
+    elite_arch_ids = set()
+    power_arch_ids = set()
+    if 'archetype_label' in model_df.columns and 'archetype_id' in model_df.columns:
+        for label, gdf in model_df.groupby('archetype_label'):
+            arch_id = gdf['archetype_id'].iloc[0]
+            if label in elite_arch_labels:
+                elite_arch_ids.add(int(arch_id))
+            if label in power_arch_labels:
+                power_arch_ids.add(int(arch_id))
+
     return {
-        "models":       results,
-        "feature_cols": feature_cols,
+        "models":           results,
+        "feature_cols":     feature_cols,
         "feature_importance": imp_df,
-        "best_model_name": best_name,
+        "best_model_name":  best_name,
+        "elite_arch_ids":   elite_arch_ids,
+        "power_arch_ids":   power_arch_ids,
     }
 
 
@@ -134,6 +176,7 @@ def project_player(player_history: pd.DataFrame,
                    model_bundle: dict,
                    arch_model: dict,
                    n_years: int = 5,
+                   archetype_models: dict = None,
                    n_bootstrap: int = 200,
                    current_year: int = 2024) -> pd.DataFrame:
     """
@@ -173,12 +216,43 @@ def project_player(player_history: pd.DataFrame,
                                      if yr > 1 else latest["WAR_prev"])
         feat_row["service_years"] = latest["service_years"] + yr
 
-        # Ensemble prediction
+        # Ensemble prediction — use archetype-specific model if available
         X = _build_feature_row(feat_row, model_bundle, arch_id)
+        
+        # Try archetype-specific model first
+        arch_label = arch_info.get("archetype_label", "")
+        use_bundle = model_bundle
+        if archetype_models and arch_label in archetype_models:
+            use_bundle = archetype_models[arch_label]
+            X_arch = _build_feature_row(feat_row, use_bundle, arch_id)
+        else:
+            X_arch = X
+            use_bundle = model_bundle
+
         war_preds = []
-        for name, res in model_bundle["models"].items():
-            war_preds.append(res["model"].predict(X)[0])
-        war_point = float(np.mean(war_preds))
+        war_weights = []
+        elite_archs = ['Franchise Cornerstone', 'Two-Way Superstar', 'Two-Way Threat']
+        is_elite = arch_label in elite_archs
+
+        for name, res in use_bundle["models"].items():
+            try:
+                pred = res["model"].predict(X_arch)[0]
+            except:
+                pred = res["model"].predict(X)[0]
+            war_preds.append(pred)
+            # Weight GradientBoosting more for elite archetypes (captures non-linear aging)
+            if is_elite and name == "GradientBoosting":
+                war_weights.append(0.5)
+            elif is_elite and name == "RandomForest":
+                war_weights.append(0.3)
+            elif is_elite and name == "Ridge":
+                war_weights.append(0.2)
+            else:
+                war_weights.append(1.0)
+
+        # Weighted average
+        total_w = sum(war_weights)
+        war_point = float(sum(p*w for p,w in zip(war_preds, war_weights)) / total_w)
 
         # ── Aging curve blend ────────────────────────────────────────
         # Blend model prediction with archetype aging curve
@@ -238,9 +312,9 @@ def project_player(player_history: pd.DataFrame,
 
         war_p10 = float(np.percentile(boot_preds, 10))
         war_p50 = float(np.percentile(boot_preds, 50))
-        # Residual correction for elite players (empirically derived from backtest)
+        # Residual correction for elite players (empirically derived from multi-year backtest)
         if war_p50 >= 5.0:
-            war_p50 += 1.5
+            war_p50 += 0.5
         elif war_p50 >= 4.0:
             war_p50 += 0.3
         war_p90 = float(np.percentile(boot_preds, 90))
@@ -275,18 +349,45 @@ def project_player(player_history: pd.DataFrame,
 
 def _build_feature_row(row: pd.Series, model_bundle: dict, arch_id: int) -> np.ndarray:
     """Build a model-ready feature array from a season row."""
-    base_feats = []
-    for f in PREDICTION_FEATURES:
-        val = row.get(f, 0)
-        base_feats.append(float(val) if not pd.isna(val) else 0.0)
+    feature_cols = model_bundle["feature_cols"]
+    feats = []
 
-    # Arch one-hot
-    n_clusters = max(model_bundle["feature_cols"].count("arch_"),
-                     len([c for c in model_bundle["feature_cols"] if c.startswith("arch_")]))
-    arch_cols  = [c for c in model_bundle["feature_cols"] if c.startswith("arch_")]
-    arch_vec   = [1.0 if c == f"arch_{arch_id}" else 0.0 for c in arch_cols]
+    for f in feature_cols:
+        if f.startswith("arch_"):
+            feats.append(1.0 if f == f"arch_{arch_id}" else 0.0)
+        elif f == "is_elite_arch":
+            # Compute from arch_id — elite arch_ids correspond to Franchise Cornerstone, Two-Way Superstar, Two-Way Threat
+            # We store elite arch labels in model_bundle if available
+            elite_ids = model_bundle.get("elite_arch_ids", set())
+            feats.append(1.0 if arch_id in elite_ids else 0.0)
+        elif f == "is_power_arch":
+            power_ids = model_bundle.get("power_arch_ids", set())
+            feats.append(1.0 if arch_id in power_ids else 0.0)
+        elif f == "elite_x_war":
+            elite_ids = model_bundle.get("elite_arch_ids", set())
+            is_elite = 1.0 if arch_id in elite_ids else 0.0
+            war_val = float(row.get("WAR", 0) or 0)
+            feats.append(is_elite * war_val)
+        elif f == "elite_x_peak":
+            elite_ids = model_bundle.get("elite_arch_ids", set())
+            is_elite = 1.0 if arch_id in elite_ids else 0.0
+            peak_val = float(row.get("peak_WAR", 0) or 0)
+            feats.append(is_elite * peak_val)
+        elif f == "elite_x_top3":
+            elite_ids = model_bundle.get("elite_arch_ids", set())
+            is_elite = 1.0 if arch_id in elite_ids else 0.0
+            top3_val = float(row.get("WAR_top3_avg", 0) or 0)
+            feats.append(is_elite * top3_val)
+        elif f == "power_x_war":
+            power_ids = model_bundle.get("power_arch_ids", set())
+            is_power = 1.0 if arch_id in power_ids else 0.0
+            war_val = float(row.get("WAR", 0) or 0)
+            feats.append(is_power * war_val)
+        else:
+            val = row.get(f, 0)
+            feats.append(float(val) if not pd.isna(val) else 0.0)
 
-    return np.array(base_feats + arch_vec).reshape(1, -1)
+    return np.array(feats).reshape(1, -1)
 
 
 def _injury_factor(age: float) -> float:
@@ -297,6 +398,83 @@ def _injury_factor(age: float) -> float:
 
 
 # ── Contract Value Calculator ─────────────────────────────────────────────────
+
+def train_archetype_models(model_df: pd.DataFrame,
+                           feature_cols: list) -> dict:
+    """
+    Train separate prediction models for each archetype class.
+    Falls back to global model for archetypes with insufficient data.
+    Returns dict keyed by archetype_label.
+    """
+    MIN_SAMPLES = 150  # minimum player-seasons to train a reliable model
+
+    archetype_models = {}
+    archetypes = model_df['archetype_label'].unique() if 'archetype_label' in model_df.columns else []
+
+    print("\n🎯  Training archetype-specific models...")
+    for arch in archetypes:
+        arch_df = model_df[model_df['archetype_label'] == arch].copy()
+        n = len(arch_df)
+        if n < MIN_SAMPLES:
+            print(f"    {arch}: only {n} samples — will use global model")
+            continue
+
+        X = arch_df[feature_cols].fillna(0)
+        y = arch_df["WAR_next"]
+        groups = arch_df["player_id"]
+
+        models = {
+            "GradientBoosting": GradientBoostingRegressor(
+                n_estimators=300, max_depth=4, learning_rate=0.05,
+                subsample=0.8, random_state=42
+            ),
+            "RandomForest": RandomForestRegressor(
+                n_estimators=200, max_depth=6, random_state=42, n_jobs=-1
+            ),
+            "Ridge": Ridge(alpha=10.0),
+        }
+
+        n_splits = min(5, len(arch_df['player_id'].unique()))
+        gkf = GroupKFold(n_splits=n_splits)
+        results = {}
+        maes = []
+
+        for name, model in models.items():
+            try:
+                cv_scores = cross_val_score(
+                    model, X, y, cv=gkf, groups=groups,
+                    scoring="neg_mean_absolute_error"
+                )
+                mae = -cv_scores.mean()
+                maes.append((mae, name))
+            except:
+                mae = 999
+            model.fit(X, y)
+            results[name] = {"model": model, "mae": mae}
+
+        best_name = min(results, key=lambda k: results[k]["mae"])
+        best_mae = results[best_name]["mae"]
+
+        # For elite archetypes, prefer GradientBoosting to capture non-linear aging
+        elite_archetypes = ['Franchise Cornerstone', 'Two-Way Superstar', 'Two-Way Threat']
+        if arch in elite_archetypes and 'GradientBoosting' in results:
+            best_name = 'GradientBoosting'
+            best_mae = results['GradientBoosting']['mae']
+
+        print(f"    {arch}: n={n}, best={best_name}, MAE={best_mae:.3f}")
+
+        archetype_models[arch] = {
+            "models": results,
+            "best_name": best_name,
+            "feature_cols": feature_cols,
+            "n_samples": n,
+        }
+
+    print(f"  ✅  Trained {len(archetype_models)} archetype models")
+    return archetype_models
+
+
+
 
 def estimate_contract(projections: pd.DataFrame,
                       contract_years: int,

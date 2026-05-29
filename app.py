@@ -24,11 +24,12 @@ team_stats_cache = {}  # League-wide team summary stats
 # ── Global state (loaded once on startup) ────────────────────────────────────
 DATA      = None
 PROFILES  = None
+ARCH_MODELS = {}
 ARCH_BUNDLE = None
 TRAINED   = None
 
 def load_pipeline():
-    global DATA, PROFILES, ARCH_BUNDLE, TRAINED
+    global DATA, PROFILES, ARCH_BUNDLE, TRAINED, ARCH_MODELS
     print("Loading pipeline from pickle...")
     try:
         import pickle
@@ -40,6 +41,7 @@ def load_pipeline():
         PROFILES = bundle['PROFILES']
         ARCH_BUNDLE = bundle['ARCH_BUNDLE']
         TRAINED = bundle['TRAINED']
+        ARCH_MODELS = bundle.get('ARCH_MODELS', {})
         print(f"Hitter pipeline loaded: {len(DATA):,} player-seasons")
         load_pitcher_pipeline()
         if os.environ.get('RENDER') == 'true':
@@ -96,7 +98,7 @@ def get_player(name):
     proposed_aav   = request.args.get("aav", None, type=float)
     n_years = max(contract_years, 5)  # always project at least 5 years
 
-    proj = project_player(history, TRAINED, ARCH_BUNDLE, n_years=n_years)
+    proj = project_player(history, TRAINED, ARCH_BUNDLE, n_years=n_years, archetype_models=ARCH_MODELS)
 
     from models.prediction import estimate_contract
     contract = estimate_contract(
@@ -334,7 +336,7 @@ def get_roster_pitchers(team):
             latest   = history.sort_values("season").iloc[-1]
             arch     = classify_pitcher(history, PITCHER_BUNDLE)
             proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
-            proj_war = round(float(proj["war_p50"].mean()), 1)
+            proj_war = round(float(proj["war_p50"].iloc[0]), 1)
             current_age = int(latest["age"]) + (2026 - int(latest["season"]))
             roster.append({
                 "name":       name,
@@ -389,8 +391,8 @@ def get_roster(team):
             arch    = classify_player(history, ARCH_BUNDLE)
 
             # Quick 3-year projection
-            proj    = project_player(history, TRAINED, ARCH_BUNDLE, n_years=3)
-            proj_war = round(float(proj["war_p50"].mean()), 1)
+            proj    = project_player(history, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
+            proj_war = round(float(proj["war_p50"].iloc[0]), 1)
 
             current_year   = 2026
             latest_season  = int(latest["season"])
@@ -585,7 +587,7 @@ def get_live_roster(team):
                         try:
                             hist = find_player_in_data(DATA, p['name'])
                             if not hist.empty:
-                                proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3)
+                                proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
                                 p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
                             else:
                                 p['proj_war'] = 'N/A'
@@ -639,7 +641,7 @@ def get_live_roster(team):
                     latest   = history.sort_values("season").iloc[-1]
                     arch     = classify_pitcher(history, PITCHER_BUNDLE)
                     proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
-                    proj_war = round(float(proj["war_p50"].mean()), 1)
+                    proj_war = round(float(proj["war_p50"].iloc[0]), 1)
                     pitchers.append({
                         "name":       name,
                         "position":   position,
@@ -667,8 +669,8 @@ def get_live_roster(team):
                 try:
                     latest   = history.sort_values("season").iloc[-1]
                     arch     = classify_player(history, ARCH_BUNDLE)
-                    proj     = project_player(history, TRAINED, ARCH_BUNDLE, n_years=3)
-                    proj_war = round(float(proj["war_p50"].mean()), 1)
+                    proj     = project_player(history, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
+                    proj_war = round(float(proj["war_p50"].iloc[0]), 1)
                     hitters.append({
                         "name":       name,
                         "position":   position,
@@ -852,7 +854,7 @@ def prewarm_cache():
                     try:
                         hist = find_player_in_data(DATA, p['name'])
                         if not hist.empty:
-                            proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3)
+                            proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
                             p['proj_war'] = round(float(proj["war_p50"].mean()), 1)
                         else:
                             p['proj_war'] = 'N/A'

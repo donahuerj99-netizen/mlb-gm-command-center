@@ -250,6 +250,23 @@ def _engineer_features(df):
         lambda g: war_normalized.loc[g.index].rolling(3, min_periods=1).mean()
     ).reset_index(level=0, drop=True).round(2)
     df["career_WAR_to_date"] = df.groupby("player_id")["WAR"].cumsum().round(2)
+
+    # Peak WAR — best single season to date (key signal for elite players)
+    df["peak_WAR"] = df.groupby("player_id")["WAR"].transform(
+        lambda x: x.expanding().max()
+    ).round(2)
+
+    # 5-year rolling average (smoother signal for veterans)
+    df["WAR_5yr_avg"] = df.groupby("player_id").apply(
+        lambda g: war_normalized.loc[g.index].rolling(5, min_periods=1).mean()
+    ).reset_index(level=0, drop=True).round(2)
+
+    # Average of best 3 seasons to date (captures ceiling, not just recent form)
+    def top3_avg(x):
+        return x.expanding().apply(lambda v: sorted(v)[-min(3,len(v)):] and
+               sum(sorted(v)[-min(3,len(v)):]) / min(3,len(v)), raw=True)
+    df["WAR_top3_avg"] = df.groupby("player_id")["WAR"].transform(top3_avg).round(2)
+
     return df
 
 def _estimate_salary(war, service):
