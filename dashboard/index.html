@@ -4053,9 +4053,14 @@ function compareAutocomplete() {
   const matches = src.filter(n => n.toLowerCase().includes(q)).slice(0, 8);
   if (!matches.length) { ac.style.display='none'; return; }
   ac.innerHTML = matches.map(n =>
-    '<div class="ac-item" onclick="selectComparePlayer(\'' + n.replace(/'/g, "\\'") + '\')">'+n+'</div>'
+    '<div class="ac-item" data-name="' + n.replace(/"/g,'&quot;') + '">' + n + '</div>'
   ).join('');
   ac.style.display = 'block';
+  // Use event delegation for clicks
+  ac.onclick = function(e) {
+    const item = e.target.closest('.ac-item');
+    if (item) selectComparePlayer(item.dataset.name);
+  };
 }
 
 function selectComparePlayer(name) {
@@ -4193,8 +4198,8 @@ function renderComparisonOverlay(p1, p2) {
   ];
 
   const stats = (ip1 || ip2) ? pitcherStats : hitterStats;
-  const arch1Color = ARCH_COLORS[p1.archetype?.archetype_label] || '#94a3b8';
-  const arch2Color = ARCH_COLORS[p2.archetype?.archetype_label] || '#94a3b8';
+  const arch1Color = (p1.type==='pitcher' ? PITCHER_ARCH_COLORS : ARCH_COLORS)[p1.archetype?.archetype_label] || '#94a3b8';
+  const arch2Color = (p2.type==='pitcher' ? PITCHER_ARCH_COLORS : ARCH_COLORS)[p2.archetype?.archetype_label] || '#94a3b8';
 
   const statsRows = stats.map(([label, v1, v2, hib, fmt]) => {
     const w = statWinner(v1, v2, hib);
