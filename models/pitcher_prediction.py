@@ -30,18 +30,25 @@ PITCHER_INJURY_RISK = {
 
 PREDICTION_FEATURES = [
     "age", "WAR", "WAR_prev", "WAR_3yr_avg", "WAR_delta",
+    "WAR_5yr_avg", "peak_WAR", "WAR_top3_avg",
     "ERA", "FIP", "WHIP", "SO9", "BB9", "HR9",
     "K_pct", "BB_pct", "K_BB_ratio", "service_years",
 ]
 
 
 def build_pitcher_prediction_dataset(df, profiles):
+    from models.pitcher_clustering import classify_pitcher_row
     arch_map = profiles.set_index("player_id")[["archetype_id","archetype_label"]]
     merged   = df.merge(arch_map, on="player_id", how="left")
     merged   = pd.get_dummies(merged, columns=["archetype_id"], prefix="arch")
     arch_cols = [c for c in merged.columns if c.startswith("arch_")]
     all_features = PREDICTION_FEATURES + arch_cols
     model_df = merged.dropna(subset=["WAR_next"] + PREDICTION_FEATURES).copy()
+    # Add rule-based archetype labels for archetype-specific model training
+    if "archetype_id" not in model_df.columns and "archetype_id" in merged.columns:
+        model_df["archetype_id"] = merged.loc[model_df.index, "archetype_id"]
+    # Use rule-based labels (more granular than clustering)
+    model_df["archetype_label"] = model_df.apply(classify_pitcher_row, axis=1)
     return model_df, all_features
 
 
@@ -87,7 +94,65 @@ def train_pitcher_model(model_df, feature_cols):
             "feature_importance": imp_df, "best_model_name": best_name}
 
 
-def project_pitcher(history, model_bundle, arch_bundle, n_years=5, current_year=2025):
+def train_pitcher_archetype_models(model_df, feature_cols):
+    """Train separate models per pitcher archetype."""
+    MIN_SAMPLES = 120
+    archetype_models = {}
+    archetypes = model_df['archetype_label'].unique() if 'archetype_label' in model_df.columns else []
+
+    print("\n🎯  Training pitcher archetype models...")
+    for arch in archetypes:
+        arch_df = model_df[model_df['archetype_label'] == arch].copy()
+        n = len(arch_df)
+        if n < MIN_SAMPLES:
+            print(f"    {arch}: only {n} samples — using global model")
+            continue
+
+        X = arch_df[feature_cols].fillna(0)
+        y = arch_df["WAR_next"]
+        groups = arch_df["player_id"]
+        n_splits = min(5, len(arch_df['player_id'].unique()))
+
+        models = {
+            "GradientBoosting": GradientBoostingRegressor(
+                n_estimators=300, max_depth=4, learning_rate=0.05,
+                subsample=0.8, random_state=42),
+            "RandomForest": RandomForestRegressor(
+                n_estimators=200, max_depth=6, random_state=42, n_jobs=-1),
+            "Ridge": Ridge(alpha=10.0),
+        }
+
+        gkf = GroupKFold(n_splits=n_splits)
+        results = {}
+        for name, model in models.items():
+            try:
+                cv = cross_val_score(model, X, y, cv=gkf, groups=groups,
+                                     scoring="neg_mean_absolute_error")
+                mae = -cv.mean()
+            except:
+                mae = 999
+            model.fit(X, y)
+            results[name] = {"model": model, "cv_mae": round(mae, 3)}
+
+        # Prefer GradientBoosting for ace/elite archetypes
+        elite = ['Ace / Frontline Starter', 'No. 2 / Quality Starter', 'Mid-Rotation Starter']
+        best_name = 'GradientBoosting' if arch in elite else min(results, key=lambda k: results[k]["cv_mae"])
+        best_mae = results[best_name]["cv_mae"]
+        print(f"    {arch}: n={n}, best={best_name}, MAE={best_mae:.3f}")
+
+        archetype_models[arch] = {
+            "models": results,
+            "best_name": best_name,
+            "feature_cols": feature_cols,
+            "n_samples": n,
+        }
+
+    print(f"  ✅  Trained {len(archetype_models)} pitcher archetype models")
+    return archetype_models
+
+
+
+def project_pitcher(history, model_bundle, arch_bundle, n_years=5, current_year=2025, archetype_models=None):
     from models.pitcher_clustering import classify_pitcher
     arch_info = classify_pitcher(history, arch_bundle)
     arch_id   = arch_info["archetype_id"]
@@ -106,8 +171,44 @@ def project_pitcher(history, model_bundle, arch_bundle, n_years=5, current_year=
         feat_row["service_years"] = latest["service_years"] + yr
 
         X = _build_feature_row(feat_row, model_bundle, arch_id)
-        war_preds = [res["model"].predict(X)[0] for res in model_bundle["models"].values()]
-        war_point = float(np.mean(war_preds))
+        
+        # Use archetype-specific model if available
+        # Use rule-based label (more granular) for routing to archetype model
+        from models.pitcher_clustering import classify_pitcher_row
+        arch_label = classify_pitcher_row(feat_row)
+        elite_archs = ['Ace / Frontline Starter', 'No. 2 / Quality Starter', 'Mid-Rotation Starter']
+        is_elite = arch_label in elite_archs
+        
+        if archetype_models and arch_label in archetype_models:
+            use_bundle = archetype_models[arch_label]
+            try:
+                X_arch = _build_feature_row(feat_row, use_bundle, arch_id)
+            except:
+                X_arch = X
+                use_bundle = model_bundle
+        else:
+            use_bundle = model_bundle
+            X_arch = X
+
+        war_preds = []
+        war_weights = []
+        for name, res in use_bundle["models"].items():
+            try:
+                pred = res["model"].predict(X_arch)[0]
+            except:
+                pred = res["model"].predict(X)[0]
+            war_preds.append(pred)
+            if is_elite and name == "GradientBoosting":
+                war_weights.append(0.5)
+            elif is_elite and name == "RandomForest":
+                war_weights.append(0.3)
+            elif is_elite:
+                war_weights.append(0.2)
+            else:
+                war_weights.append(1.0)
+
+        total_w = sum(war_weights)
+        war_point = float(sum(p*w for p,w in zip(war_preds, war_weights)) / total_w)
 
         # ── Aging curve blend ────────────────────────────────────────
         base_war = float(latest.get("WAR", 0) or 0)

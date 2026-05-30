@@ -255,6 +255,36 @@ def _build_summary(profiles):
     }).reset_index(drop=True).sort_values("avg_peak_WAR", ascending=False)
 
 
+def classify_pitcher_row(row):
+    """Classify a single pitcher row using rule-based logic. Used for training data labeling."""
+    role = row.get("role", "SP")
+    fip = float(row.get("FIP", 4.5) or 4.5)
+    war = float(row.get("WAR", 0) or 0)
+    so9 = float(row.get("SO9", 8.0) or 8.0)
+
+    if role == "SP":
+        if fip <= 2.80 or war >= 5.0:
+            return "Ace / Frontline Starter"
+        elif fip <= 3.30 and so9 >= 9.0:
+            return "Power Arm Starter"
+        elif fip <= 3.70:
+            return "No. 2 / Quality Starter"
+        elif fip <= 4.20:
+            return "Mid-Rotation Starter"
+        elif fip >= 5.20 or war <= 0.2:
+            return "Rotation Filler"
+        else:
+            return "Back-End Starter"
+    else:
+        if fip <= 2.80 and so9 >= 10.0 and war >= 0.8:
+            return "Elite Closer / Dominant RP"
+        elif fip <= 3.40:
+            return "High-Leverage Setup Man"
+        elif fip <= 4.20:
+            return "Solid Middle Reliever"
+        else:
+            return "Situational / Mop-up RP"
+
 def classify_pitcher(history, bundle):
     role = history["role"].iloc[-1] if "role" in history.columns else "SP"
     sub_bundle = bundle["sp_bundle"] if role == "SP" else bundle["rp_bundle"]

@@ -215,6 +215,20 @@ def _engineer_features(df):
     ).reset_index(level=0, drop=True).round(2)
     df["career_WAR_to_date"] = df.groupby("player_id")["WAR"].cumsum().round(2)
     df["IP_per_start"] = (df["IP"] / df["GS"].clip(lower=1)).round(1) if "GS" in df.columns else 6.0
+
+    # Peak WAR and top-3 avg (same as hitter model — key signal for elite pitchers)
+    df["peak_WAR"] = df.groupby("player_id")["WAR"].transform(
+        lambda x: x.expanding().max()
+    ).round(2)
+
+    df["WAR_5yr_avg"] = df.groupby("player_id").apply(
+        lambda g: war_normalized.loc[g.index].rolling(5, min_periods=1).mean()
+    ).reset_index(level=0, drop=True).round(2)
+
+    def top3_avg(x):
+        return x.expanding().apply(lambda v: sum(sorted(v)[-min(3,len(v)):]) / min(3,len(v)), raw=True)
+    df["WAR_top3_avg"] = df.groupby("player_id")["WAR"].transform(top3_avg).round(2)
+
     return df
 
 

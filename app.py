@@ -68,7 +68,7 @@ def get_proj_war(hist, name):
             p_hist = PITCHER_DATA[PITCHER_DATA['name'].apply(_norm) == _norm(name)]
             if not p_hist.empty and len(p_hist) >= 2:
                 from models.pitcher_prediction import project_pitcher
-                p_proj = project_pitcher(p_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=1)
+                p_proj = project_pitcher(p_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=1, archetype_models=PITCHER_ARCH_MODELS)
                 war = round(war + float(p_proj["war_p50"].iloc[0]), 1)
         return war
     except:
@@ -140,7 +140,7 @@ def get_player(name):
     if twp_pitcher_hist is not None and not twp_pitcher_hist.empty and len(twp_pitcher_hist) >= 2:
         try:
             from models.pitcher_prediction import project_pitcher
-            twp_proj = project_pitcher(twp_pitcher_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=n_years)
+            twp_proj = project_pitcher(twp_pitcher_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=n_years, archetype_models=PITCHER_ARCH_MODELS)
             # Add pitcher WAR to each projection year
             for i in range(min(len(proj), len(twp_proj))):
                 proj.iloc[i, proj.columns.get_loc('war_p50')] = round(
@@ -264,12 +264,13 @@ def get_market():
 
 # ── Pitcher Pipeline ──────────────────────────────────────────────────────────
 PITCHER_DATA     = None
+PITCHER_ARCH_MODELS = {}
 PITCHER_PROFILES = None
 PITCHER_BUNDLE   = None
 PITCHER_TRAINED  = None
 
 def load_pitcher_pipeline():
-    global PITCHER_DATA, PITCHER_PROFILES, PITCHER_BUNDLE, PITCHER_TRAINED
+    global PITCHER_DATA, PITCHER_PROFILES, PITCHER_BUNDLE, PITCHER_TRAINED, PITCHER_ARCH_MODELS
     print("Loading pitcher pipeline from pickle...")
     try:
         import pickle
@@ -281,6 +282,7 @@ def load_pitcher_pipeline():
         PITCHER_PROFILES = bundle['PITCHER_PROFILES']
         PITCHER_BUNDLE = bundle['PITCHER_BUNDLE']
         PITCHER_TRAINED = bundle['PITCHER_TRAINED']
+        PITCHER_ARCH_MODELS = bundle.get('PITCHER_ARCH_MODELS', {})
         print(f"Pitcher pipeline loaded: {len(PITCHER_DATA):,} pitcher-seasons")
     except Exception as e:
         import traceback
@@ -312,7 +314,7 @@ def get_pitcher(name):
     proposed_aav   = request.args.get("aav", None, type=float)
 
     proj_years = max(contract_years, 5)  # always project at least 5 years
-    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=proj_years)
+    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=proj_years, archetype_models=PITCHER_ARCH_MODELS)
     contract = estimate_pitcher_contract(proj, contract_years, proposed_aav)
 
     current_year  = 2026
@@ -394,7 +396,7 @@ def get_roster_pitchers(team):
             if history.empty: continue
             latest   = history.sort_values("season").iloc[-1]
             arch     = classify_pitcher(history, PITCHER_BUNDLE)
-            proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
+            proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3, archetype_models=PITCHER_ARCH_MODELS)
             proj_war = round(float(proj["war_p50"].iloc[0]), 1)
             current_age = int(latest["age"]) + (2026 - int(latest["season"]))
             roster.append({
@@ -657,7 +659,7 @@ def get_live_roster(team):
                         try:
                             hist = find_player_in_data(PITCHER_DATA, p['name'])
                             if not hist.empty:
-                                proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
+                                proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3, archetype_models=PITCHER_ARCH_MODELS)
                                 p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                             else:
                                 p['proj_war'] = 'N/A'
@@ -698,7 +700,7 @@ def get_live_roster(team):
                 try:
                     latest   = history.sort_values("season").iloc[-1]
                     arch     = classify_pitcher(history, PITCHER_BUNDLE)
-                    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
+                    proj     = project_pitcher(history, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3, archetype_models=PITCHER_ARCH_MODELS)
                     proj_war = round(float(proj["war_p50"].iloc[0]), 1)
                     pitchers.append({
                         "name":       name,
@@ -927,7 +929,7 @@ def prewarm_cache():
                     try:
                         hist = find_player_in_data(PITCHER_DATA, p['name'])
                         if not hist.empty:
-                            proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3)
+                            proj = project_pitcher(hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=3, archetype_models=PITCHER_ARCH_MODELS)
                             p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
                         else:
                             p['proj_war'] = 'N/A'
