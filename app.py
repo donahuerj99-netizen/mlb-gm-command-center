@@ -55,6 +55,39 @@ def load_pipeline():
         traceback.print_exc()
 
 
+def get_proj_war(hist, name):
+    """Get projected WAR for a player, adding pitcher WAR for TWP players."""
+    try:
+        from models.prediction import project_player as _pp
+        proj = _pp(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
+        war = round(float(proj["war_p50"].iloc[0]), 1)
+        # TWP check: if player also has pitcher data, add pitcher projection
+        if PITCHER_DATA is not None:
+            import unicodedata as _ud
+            def _norm(s): return _ud.normalize('NFD', str(s)).encode('ascii','ignore').decode().lower().strip()
+            p_hist = PITCHER_DATA[PITCHER_DATA['name'].apply(_norm) == _norm(name)]
+            if not p_hist.empty and len(p_hist) >= 2:
+                from models.pitcher_prediction import project_pitcher
+                p_proj = project_pitcher(p_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=1)
+                war = round(war + float(p_proj["war_p50"].iloc[0]), 1)
+        return war
+    except:
+        return None
+
+def get_twp_latest_war(name, season, base_war):
+    """For TWP players, add pitcher WAR to latest_WAR display."""
+    try:
+        if PITCHER_DATA is None: return base_war
+        import unicodedata as _ud
+        def _norm(s): return _ud.normalize('NFD', str(s)).encode('ascii','ignore').decode().lower().strip()
+        p_hist = PITCHER_DATA[(PITCHER_DATA['name'].apply(_norm) == _norm(name)) & 
+                              (PITCHER_DATA['season'] == season)]
+        if p_hist.empty: return base_war
+        p_war = round(float(p_hist['WAR'].iloc[0]), 1)
+        return round(base_war + p_war, 1)
+    except:
+        return base_war
+
 # ── API Routes ────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -100,6 +133,23 @@ def get_player(name):
 
     proj = project_player(history, TRAINED, ARCH_BUNDLE, n_years=n_years, archetype_models=ARCH_MODELS)
 
+    # TWP (Two-Way Player) handling: add pitcher projection on top of hitter projection
+    import unicodedata as _ud
+    def _norm(s): return _ud.normalize('NFD', str(s)).encode('ascii','ignore').decode().lower().strip()
+    twp_pitcher_hist = PITCHER_DATA[PITCHER_DATA['name'].apply(_norm) == _norm(player_name)] if PITCHER_DATA is not None else None
+    if twp_pitcher_hist is not None and not twp_pitcher_hist.empty and len(twp_pitcher_hist) >= 2:
+        try:
+            from models.pitcher_prediction import project_pitcher
+            twp_proj = project_pitcher(twp_pitcher_hist, PITCHER_TRAINED, PITCHER_BUNDLE, n_years=n_years)
+            # Add pitcher WAR to each projection year
+            for i in range(min(len(proj), len(twp_proj))):
+                proj.iloc[i, proj.columns.get_loc('war_p50')] = round(
+                    proj.iloc[i]['war_p50'] + twp_proj.iloc[i]['war_p50'], 2)
+                proj.iloc[i, proj.columns.get_loc('war_adj')] = round(
+                    proj.iloc[i]['war_adj'] + twp_proj.iloc[i]['war_adj'], 2)
+        except Exception as e:
+            print(f"TWP pitcher projection failed: {e}")
+
     from models.prediction import estimate_contract
     contract = estimate_contract(
         proj,
@@ -117,13 +167,22 @@ def get_player(name):
     # Determine if player is active (played in 2024 or 2025)
     is_active = latest_season >= 2024
 
+    # TWP: add pitcher WAR to latest_WAR and career_WAR for display
+    twp_latest_war = 0.0
+    twp_career_war = 0.0
+    if twp_pitcher_hist is not None and not twp_pitcher_hist.empty:
+        twp_latest = twp_pitcher_hist[twp_pitcher_hist['season'] == latest_season]
+        if not twp_latest.empty:
+            twp_latest_war = round(float(twp_latest['WAR'].iloc[0]), 1)
+        twp_career_war = round(float(twp_pitcher_hist['WAR'].sum()), 1)
+
     career = {
         "seasons":     int(history["season"].nunique()),
-        "career_WAR":  round(float(history["WAR"].sum()), 1),
+        "career_WAR":  round(float(history["WAR"].sum()) + twp_career_war, 1),
         "peak_WAR":    round(float(history["WAR"].max()), 1),
         "avg_WAR":     round(float(history["WAR"].mean()), 2),
         "latest_year": latest_season,
-        "latest_WAR":  round(float(latest["WAR"]), 1),
+        "latest_WAR":  round(float(latest["WAR"]) + twp_latest_war, 1),
         "age":         current_age,
         "last_season_age": last_known_age,
         "is_active":   is_active,
@@ -587,8 +646,7 @@ def get_live_roster(team):
                         try:
                             hist = find_player_in_data(DATA, p['name'])
                             if not hist.empty:
-                                proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
-                                p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
+                                p['proj_war'] = get_proj_war(hist, p['name'])
                             else:
                                 p['proj_war'] = 'N/A'
                         except:
@@ -676,7 +734,7 @@ def get_live_roster(team):
                         "position":   position,
                         "jersey":     player["jersey"],
                         "age":        int(latest["age"]) + (2026 - int(latest["season"])),
-                        "latest_WAR": round(float(latest["WAR"]), 1),
+                        "latest_WAR": get_twp_latest_war(name, int(latest["season"]), round(float(latest["WAR"]), 1)),
                         "proj_war":   proj_war,
                         "wRC_plus":   int(latest.get("wRC_plus", 100)),
                         "archetype":  arch["archetype_label"],
@@ -786,7 +844,7 @@ def prewarm_cache():
                                 "name": name, "position": position,
                                 "jersey": player.get("jerseyNumber",""),
                                 "age": int(latest["age"]) + (2026 - int(latest["season"])),
-                                "latest_WAR": round(float(latest["WAR"]), 1),
+                                "latest_WAR": get_twp_latest_war(name, int(latest["season"]), round(float(latest["WAR"]), 1)),
                                 "proj_war": None,
                                 "wRC_plus": int(latest.get("wRC_plus", 100)),
                                 "archetype": arch["archetype_label"],
@@ -854,8 +912,7 @@ def prewarm_cache():
                     try:
                         hist = find_player_in_data(DATA, p['name'])
                         if not hist.empty:
-                            proj = project_player(hist, TRAINED, ARCH_BUNDLE, n_years=3, archetype_models=ARCH_MODELS)
-                            p['proj_war'] = round(float(proj["war_p50"].iloc[0]), 1)
+                            p['proj_war'] = get_proj_war(hist, p['name'])
                         else:
                             p['proj_war'] = 'N/A'
                     except:

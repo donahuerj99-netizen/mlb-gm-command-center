@@ -1056,7 +1056,7 @@ canvas { max-height:200px; }
       <!-- Pitcher Roster Panel -->
       <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px">
         <div style="font-family:&#39;Bebas Neue&#39;,sans-serif;font-size:16px;letter-spacing:1px;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">PITCHERS</div>
-        <select id="pitching-team" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:&#39;DM Mono&#39;,monospace;font-size:11px;outline:none;margin-bottom:10px;cursor:pointer" onchange="loadPitchingRoster()"><option value="">Select team...</option><option value="ARI">Arizona Diamondbacks</option><option value="ATL">Atlanta Braves</option><option value="BAL">Baltimore Orioles</option><option value="BOS">Boston Red Sox</option><option value="CHC">Chicago Cubs</option><option value="CHW">Chicago White Sox</option><option value="CIN">Cincinnati Reds</option><option value="CLE">Cleveland Guardians</option><option value="COL">Colorado Rockies</option><option value="DET">Detroit Tigers</option><option value="HOU">Houston Astros</option><option value="KCR">Kansas City Royals</option><option value="LAA">Los Angeles Angels</option><option value="LAD">Los Angeles Dodgers</option><option value="MIA">Miami Marlins</option><option value="MIL">Milwaukee Brewers</option><option value="MIN">Minnesota Twins</option><option value="NYM">New York Mets</option><option value="NYY">New York Yankees</option><option value="OAK">Oakland Athletics</option><option value="PHI">Philadelphia Phillies</option><option value="PIT">Pittsburgh Pirates</option><option value="SDP">San Diego Padres</option><option value="SFG">San Francisco Giants</option><option value="SEA">Seattle Mariners</option><option value="STL">St. Louis Cardinals</option><option value="TBR">Tampa Bay Rays</option><option value="TEX">Texas Rangers</option><option value="TOR">Toronto Blue Jays</option><option value="WSN">Washington Nationals</option></select>
+        <!-- pitching-team replaced by global team selector -->
         <div id="pitching-roster-list" style="max-height:420px;overflow-y:auto;margin-bottom:12px">
           <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Select a team above</div>
         </div>
@@ -1501,7 +1501,7 @@ function switchTab(tab) {
   if (tab === 'teamstats') loadLeagueStats();
   if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
   if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); }
-  if (tab === 'lineup') { loadLineupRoster(); }
+  if (tab === 'lineup') { loadLineupRoster(); loadPitchingRoster(); }
   const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
   // Reset builder to offense mode when leaving lineup tab
@@ -1529,6 +1529,7 @@ function onTeamChange() {
   loadTeamPayroll(team);
   loadTeamStats(); // preload for FA grade
   if (document.getElementById('tab-lineup').classList.contains('active')) loadLineupRoster();
+  if (document.getElementById('tab-lineup').classList.contains('active') && builderMode === 'pitching') loadPitchingRoster();
   // Sync trade team A
   const tradeA = document.getElementById('trade-team-a');
   if (tradeA && tradeA.value !== team) {
@@ -2120,7 +2121,9 @@ async function evaluateTrade() {
     newPayroll: newPayrollA,
     teamProjWins: teamAProjWins,
     partnerProjWins: teamBProjWins,
-    needsFilled
+    needsFilled,
+    prospectWarGiven: prospectWarA,
+    prospectWarReceived: prospectWarB,
   });
   const gradeB = generateTradeGrade({
     warReceived: warA, warGiven: warB,
@@ -2129,7 +2132,9 @@ async function evaluateTrade() {
     newPayroll: newPayrollB,
     teamProjWins: teamBProjWins,
     partnerProjWins: teamAProjWins,
-    needsFilled: 0
+    needsFilled: 0,
+    prospectWarGiven: prospectWarB,
+    prospectWarReceived: prospectWarA,
   });
 
   function gradeBox(grade, color) {
@@ -2190,8 +2195,7 @@ function setBuilderMode(mode) {
     : 'Build your rotation and bullpen';
   // Sync team selectors
   const lineupTeam = document.getElementById('lineup-team').value;
-  if (mode==='pitching' && lineupTeam && !document.getElementById('pitching-team').value) {
-    document.getElementById('pitching-team').value = lineupTeam;
+  if (mode==='pitching') {
     loadPitchingRoster();
   }
 }
@@ -2212,8 +2216,8 @@ function populatePitchingTeamSelect() {
 }
 populatePitchingTeamSelect();
 
-function loadPitchingRoster() {
-  const team = document.getElementById('pitching-team').value;
+function loadPitchingRoster(teamOverride) {
+  const team = teamOverride || document.getElementById('global-team').value;
   if (!team) return;
   const list = document.getElementById('pitching-roster-list');
   list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Loading...</div>';
@@ -3768,7 +3772,14 @@ function getTeamTier(projWins) {
 
 function generateTradeGrade(params) {
   const { warReceived, warGiven, fairReceived, fairGiven, salReceived, salGiven,
-          newPayroll, teamProjWins, partnerProjWins, needsFilled } = params;
+          newPayroll, teamProjWins, partnerProjWins, needsFilled,
+          prospectWarGiven = 0, prospectWarReceived = 0 } = params;
+  
+  // Established player WAR (subtract prospect portion)
+  const estWarGiven = warGiven - prospectWarGiven;
+  const estWarReceived = warReceived - prospectWarReceived;
+  // Is this a win-now move? Contender giving up prospects for established players
+  const isWinNowMove = prospectWarGiven > 1.5 && estWarReceived > estWarGiven;
 
   const LUX = 241;
   let score = 50; // start at C
@@ -3776,14 +3787,19 @@ function generateTradeGrade(params) {
 
   // 1. WAR VALUE (35 pts max)
   const warDiff = warReceived - warGiven;
+  // For win-now moves: use established player WAR diff (prospects are uncertain future value)
+  const effectiveWarDiff = isWinNowMove ? (estWarReceived - estWarGiven) : warDiff;
   const warPct = warGiven > 0 ? warDiff / warGiven : 0;
-  if (warDiff >= 3) { score += 25; notes.push('significant WAR upgrade'); }
-  else if (warDiff >= 1.5) { score += 15; notes.push('clear WAR improvement'); }
-  else if (warDiff >= 0.5) { score += 8; notes.push('slight WAR improvement'); }
-  else if (warDiff >= -0.5) { score += 2; notes.push('roughly even on player value'); }
-  else if (warDiff >= -1.5) { score -= 10; notes.push('moderate WAR concession'); }
-  else if (warDiff >= -3) { score -= 20; notes.push('significant WAR concession'); }
-  else { score -= 30; notes.push('major WAR concession'); }
+  if (effectiveWarDiff >= 3) { score += 25; notes.push('significant WAR upgrade'); }
+  else if (effectiveWarDiff >= 1.5) { score += 15; notes.push('clear WAR improvement'); }
+  else if (effectiveWarDiff >= 0.5) { score += 8; notes.push('slight WAR improvement'); }
+  else if (effectiveWarDiff >= -0.5) { score += 2; notes.push('roughly even on player value'); }
+  else if (effectiveWarDiff >= -1.5) { score -= 8; notes.push('moderate WAR concession'); }
+  else if (effectiveWarDiff >= -3) { score -= 15; notes.push('significant WAR concession'); }
+  else { score -= 22; notes.push('major WAR concession'); }
+  // Small additional penalty for total prospect WAR given up (long-term cost)
+  if (prospectWarGiven > 3) { score -= 5; notes.push('significant prospect cost'); }
+  else if (prospectWarGiven > 1.5) { score -= 2; }
 
   // 2. CONTRACT EFFICIENCY (25 pts max)
   const valDiff = fairReceived - fairGiven;
@@ -3798,9 +3814,11 @@ function generateTradeGrade(params) {
   const partnerTier = getTeamTier(partnerProjWins);
 
   if (tier === 'elite' || tier === 'contender') {
-    if (warDiff >= 1) { score += 20; notes.push('win-now move for a contender'); }
+    if (isWinNowMove) {
+      score += 15; notes.push('win-now move trading prospects for proven talent');
+    } else if (warDiff >= 1) { score += 20; notes.push('win-now move for a contender'); }
     else if (warDiff >= -0.5) { score += 8; notes.push('maintains contention window'); }
-    else if (warDiff < -1.5) { score -= 25; notes.push('contender surrendering significant talent'); }
+    else if (warDiff < -1.5 && !isWinNowMove) { score -= 25; notes.push('contender surrendering significant talent'); }
     // Salary relief on contender only good if under lux
     if (salGiven > salReceived && newPayroll < LUX) { score += 5; notes.push('gains payroll flexibility'); }
     if (newPayroll > LUX + 30) { score -= 10; notes.push('deep luxury tax territory'); }
