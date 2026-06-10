@@ -77,13 +77,13 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 .topbar {
   display:flex; align-items:center; justify-content:space-between;
   padding:16px 28px; border-bottom:1px solid var(--border);
-  background:var(--s1); position:sticky; top:0; z-index:50;
+  background:var(--s1); flex-shrink:0;
 }
 .topbar-title { font-family:"Bebas Neue",sans-serif; font-size:22px; letter-spacing:2px; }
 .topbar-meta { font-family:"DM Mono",monospace; font-size:11px; color:var(--muted); }
 
 /* ── Tab content ── */
-.tab-content { display:none; padding:24px 28px; overflow-y:auto; }
+.tab-content { display:none; padding:24px 28px; }
 .tab-content.active { display:block; }
 
 /* ── Roster Tab ── */
@@ -388,6 +388,102 @@ canvas { max-height:200px; }
 .section-title { font-family:"Bebas Neue",sans-serif; font-size:16px; letter-spacing:1px; color:var(--muted); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
 
 
+/* ── Market Intel Tab ── */
+.intel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+#tab-intel {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.intel-column-header {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid;
+}
+.intel-column-header.sell-high { color: #ff6b6b; border-color: #ff6b6b; }
+.intel-column-header.buy-low   { color: #51cf66; border-color: #51cf66; }
+.intel-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: background 0.2s;
+}
+.intel-card:hover { background: rgba(255,255,255,0.06); }
+.intel-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.intel-card-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.intel-card-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.intel-stat {
+  text-align: center;
+}
+.intel-stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 1px;
+}
+.intel-stat-lbl {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.intel-delta-pos { color: #ff6b6b; }
+.intel-delta-neg { color: #51cf66; }
+.intel-note {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.intel-note.age-risk    { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+.intel-note.career-peak { background: rgba(255,193,7,0.15);   color: #ffc107; }
+.intel-note.injury      { background: rgba(173,181,189,0.15); color: #adb5bd; }
+.intel-note.bounce      { background: rgba(81,207,102,0.15);  color: #51cf66; }
+.intel-note.decline     { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+.intel-note.twp         { background: rgba(0,212,255,0.15);   color: var(--cyan); }
+.intel-note.default     { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+.trade-signal-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.trade-signal-badge.sell-high { background: rgba(255,107,107,0.2); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.4); }
+.trade-signal-badge.sell      { background: rgba(255,150,107,0.2); color: #ff966b; border: 1px solid rgba(255,150,107,0.4); }
+.trade-signal-badge.buy-low   { background: rgba(81,207,102,0.2);  color: #51cf66; border: 1px solid rgba(81,207,102,0.4); }
+.trade-signal-badge.buy       { background: rgba(81,207,150,0.2);  color: #51cf96; border: 1px solid rgba(81,207,150,0.4); }
+
 /* ── Champion DNA Tab ── */
 .champ-year-btn {
   padding: 10px 18px;
@@ -460,6 +556,9 @@ canvas { max-height:200px; }
     <button class="nav-btn" onclick="switchTab(&#39;methodology&#39;)" id="nav-methodology">
       <span class="nav-icon">◎</span> Methodology
     </button>
+    <button class="nav-btn" onclick="switchTab(&#39;intel&#39;)" id="nav-intel">
+      <span class="nav-icon">◈</span> Market Intel
+    </button>
     <button class="nav-btn active" onclick="switchTab(&#39;champ&#39;)" id="nav-champ">
       <span class="nav-icon">◆</span> Champion DNA
     </button>
@@ -509,6 +608,7 @@ canvas { max-height:200px; }
     <div class="topbar-title" id="topbar-title">CHAMPION DNA</div>
     <div class="topbar-meta">Powered by Baseball Reference · 2000–2025</div>
   </div>
+
 
   <!-- ROSTER TAB -->
   <div class="tab-content" id="tab-roster">
@@ -1341,6 +1441,48 @@ canvas { max-height:200px; }
   </div>
 
 
+  <!-- MARKET INTEL TAB -->
+  <div class="tab-content" id="tab-intel" style="width:100%;box-sizing:border-box;">
+    <div style="margin-bottom:24px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px">
+          MARKET <span style="color:var(--cyan)">INTEL</span>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">Powered by Baseball Reference · 2000–2025</div>
+      </div>
+      <div style="color:var(--text-dim);font-size:13px">
+        Players significantly outperforming or underperforming their 3-year WAR baseline — based on 2025 season data.
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)">
+        <span style="display:inline-block;width:12px;height:12px;background:#ff6b6b;border-radius:2px"></span>
+        SELL HIGH — Current WAR significantly above 3-yr avg
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)">
+        <span style="display:inline-block;width:12px;height:12px;background:#51cf66;border-radius:2px"></span>
+        BUY LOW — Current WAR significantly below 3-yr avg
+      </div>
+    </div>
+
+    <div id="intel-loading" style="text-align:center;padding:60px;color:var(--text-dim);font-size:14px">
+      Loading market intelligence...
+    </div>
+
+    <div id="intel-content" style="display:none">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;margin-bottom:4px;color:var(--text-dim)">
+        HITTERS
+      </div>
+      <div class="intel-grid" id="intel-hitter-grid"></div>
+
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;margin:32px 0 4px;color:var(--text-dim)">
+        PITCHERS
+      </div>
+      <div class="intel-grid" id="intel-pitcher-grid"></div>
+    </div>
+  </div>
+
   <!-- CHAMPION DNA TAB -->
   <div class="tab-content active" id="tab-champ">
     <div style="margin-bottom:24px">
@@ -1497,12 +1639,13 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('nav-'+tab).classList.add('active');
+  if (tab === 'intel') loadMarketIntel();
   if (tab === 'champ') { setTimeout(() => { initChampTab(); preloadAllChampYears(); }, 50); }
   if (tab === 'teamstats') loadLeagueStats();
   if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
   if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); }
   if (tab === 'lineup') { loadLineupRoster(); loadPitchingRoster(); }
-  const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS'};
+  const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS', intel:'MARKET INTEL'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
   // Reset builder to offense mode when leaving lineup tab
   if (tab !== 'lineup' && typeof setBuilderMode === 'function') {
@@ -1989,6 +2132,10 @@ function updateTradeCounts() {
 
 async function evaluateTrade() {
   if (!tradeSelA.size || !tradeSelB.size) { alert('Select at least one player from each team.'); return; }
+  // Show loading spinner
+  const result = document.getElementById('trade-result');
+  result.classList.add('show');
+  document.getElementById('trade-result-grid').innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--muted);font-size:13px;margin-top:12px;font-family:DM Mono,monospace">ANALYZING TRADE...</div></div>';
   try {
   const teamA = document.getElementById('trade-team-a').value;
   const teamB = document.getElementById('trade-team-b').value;
@@ -2053,8 +2200,16 @@ async function evaluateTrade() {
   const salB = [...tradeSelB].reduce((s,n)=>s+getSalary(n,CUR_YR),0); // salary Team B gives up
 
   // Payroll impact
-  const payrollA = contractData[[...tradeSelA][0]]?.team_payroll_2026 || 0;
-  const payrollB = contractData[[...tradeSelB][0]]?.team_payroll_2026 || 0;
+  // Fetch team payrolls directly from payroll API
+  let payrollA = 0, payrollB = 0;
+  try {
+    const [prA, prB] = await Promise.all([
+      teamA ? fetch('/api/payroll/'+teamA).then(r=>r.json()) : Promise.resolve({}),
+      teamB ? fetch('/api/payroll/'+teamB).then(r=>r.json()) : Promise.resolve({})
+    ]);
+    payrollA = prA.year_totals?.['2026'] || 0;
+    payrollB = prB.year_totals?.['2026'] || 0;
+  } catch(e) { console.log('Payroll fetch failed', e); }
   const newPayrollA = payrollA - salA + salB;
   const newPayrollB = payrollB - salB + salA;
   const LUX = 241;
@@ -2156,7 +2311,7 @@ async function evaluateTrade() {
       '<div class="tr-players">'+[...tradeSelB].map(n=>'<div style="margin-bottom:4px"><strong>'+n+'</strong>'+contractTag(n)+'</div>').join('')+
       prospectsB.map(p=>'<div style="margin-bottom:4px"><strong>'+p.name+'</strong><div style="font-size:10px;color:var(--muted)">'+p.tier+' • '+p.level+' • '+p.pos+'</div></div>').join('')+
       '</div>'+
-      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairB.toFixed(1)+'M</div>'+
+
       '<div style="font-family:\"DM Mono\",monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salB.toFixed(1)+'M</div>'+
       payrollImpact(payrollA, newPayrollA)+
     '</div>'+
@@ -2172,7 +2327,7 @@ async function evaluateTrade() {
       '<div class="tr-players">'+[...tradeSelA].map(n=>'<div style="margin-bottom:4px"><strong>'+n+'</strong>'+contractTag(n)+'</div>').join('')+
       prospectsA.map(p=>'<div style="margin-bottom:4px"><strong>'+p.name+'</strong><div style="font-size:10px;color:var(--muted)">'+p.tier+' • '+p.level+' • '+p.pos+'</div></div>').join('')+
       '</div>'+
-      '<div style="font-family:\"DM Mono\",monospace;font-size:12px;margin-top:8px;color:var(--gold)">Fair value: $'+fairA.toFixed(1)+'M</div>'+
+
       '<div style="font-family:\"DM Mono\",monospace;font-size:12px;color:var(--muted)">Salary acquired: $'+salA.toFixed(1)+'M</div>'+
       payrollImpact(payrollB, newPayrollB)+
     '</div>';
@@ -4313,6 +4468,101 @@ function toggleCompMode() {
   const d = isCareer ? cd.career : cd.cal;
   window._compareChart.data.datasets = buildCompDatasets(d);
   window._compareChart.update();
+}
+
+
+// ── MARKET INTEL ────────────────────────────────────────────────────────────
+let intelLoaded = false;
+
+function getNoteClass(note) {
+  if (!note) return '';
+  const n = note.toUpperCase();
+  if (n.includes('AGE RISK') || n.includes('DECLINE'))    return 'age-risk';
+  if (n.includes('CAREER PEAK'))                           return 'career-peak';
+  if (n.includes('INJURY'))                                return 'injury';
+  if (n.includes('BOUNCE BACK') || n.includes('YOUNG'))   return 'bounce';
+  if (n.includes('TWP'))                                   return 'twp';
+  return 'default';
+}
+
+function buildIntelColumn(players, type) {
+  const isPositive = type === 'sell';
+  const headerClass = isPositive ? 'sell-high' : 'buy-low';
+  const headerLabel = isPositive ? 'SELL HIGH' : 'BUY LOW';
+
+  let html = `<div>
+    <div class="intel-column-header ${headerClass}">${headerLabel}</div>`;
+
+  players.forEach(p => {
+    const deltaSign = p.delta > 0 ? '+' : '';
+    const deltaClass = p.delta > 0 ? 'intel-delta-pos' : 'intel-delta-neg';
+    const noteClass = getNoteClass(p.notes);
+    const noteHtml = p.notes
+      ? `<div><span class="intel-note ${noteClass}">${p.notes}</span></div>`
+      : '';
+
+    html += `<div class="intel-card">
+      <div class="intel-card-name">${p.name}</div>
+      <div class="intel-card-meta">${p.team} &nbsp;&middot;&nbsp; ${p.position} &nbsp;&middot;&nbsp; Age ${p.age}</div>
+      <div class="intel-card-stats">
+        <div class="intel-stat">
+          <div class="intel-stat-val">${p.war}</div>
+          <div class="intel-stat-lbl">2025 WAR</div>
+        </div>
+        <div class="intel-stat">
+          <div class="intel-stat-val">${p.war_3yr}</div>
+          <div class="intel-stat-lbl">3YR AVG</div>
+        </div>
+        <div class="intel-stat">
+          <div class="intel-stat-val ${deltaClass}">${deltaSign}${p.delta}</div>
+          <div class="intel-stat-lbl">DELTA</div>
+        </div>
+        <div class="intel-stat">
+          <div class="intel-stat-val">${p.peak_war !== null ? p.peak_war : '—'}</div>
+          <div class="intel-stat-lbl">PEAK</div>
+        </div>
+      </div>
+      ${noteHtml}
+    </div>`;
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function loadMarketIntel() {
+  if (intelLoaded) return;
+  fetch('/api/market_intel')
+    .then(r => r.json())
+    .then(data => {
+      const hitterGrid = document.getElementById('intel-hitter-grid');
+      const pitcherGrid = document.getElementById('intel-pitcher-grid');
+
+      hitterGrid.innerHTML = buildIntelColumn(data.hitter_sell_high, 'sell') + buildIntelColumn(data.hitter_buy_low, 'buy');
+      pitcherGrid.innerHTML = buildIntelColumn(data.pitcher_sell_high, 'sell') + buildIntelColumn(data.pitcher_buy_low, 'buy');
+
+      document.getElementById('intel-loading').style.display = 'none';
+      document.getElementById('intel-content').style.display = 'block';
+      intelLoaded = true;
+      window.marketIntelData = data;
+    })
+    .catch(e => {
+      document.getElementById('intel-loading').textContent = 'Failed to load market intelligence.';
+      console.error(e);
+    });
+}
+
+function getTradeSignalBadge(playerName) {
+  if (!window.marketIntelData) return '';
+  const all = [
+    ...window.marketIntelData.hitter_sell_high.map(p => ({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
+    ...window.marketIntelData.hitter_buy_low.map(p =>   ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
+    ...window.marketIntelData.pitcher_sell_high.map(p =>({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
+    ...window.marketIntelData.pitcher_buy_low.map(p =>  ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
+  ];
+  const match = all.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+  if (!match) return '';
+  return `<span class="trade-signal-badge ${match.cls}">${match.signal}</span>`;
 }
 
 </script>

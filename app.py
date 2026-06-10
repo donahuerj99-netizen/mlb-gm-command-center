@@ -1414,6 +1414,101 @@ def get_historic_pitcher(name, season):
     return jsonify(result)
 
 
+
+@app.route("/api/market_intel")
+def get_market_intel():
+    """Return sell-high and buy-low candidates based on WAR vs 3yr avg."""
+    import pandas as pd
+    import numpy as np
+
+    TWP_PLAYERS = ['Shohei Ohtani']
+
+    def fix_encoding(name):
+        try:
+            return name.encode('latin1').decode('utf-8')
+        except:
+            return name
+
+    def get_notes(row, is_pitcher=False):
+        notes = []
+        age = row['age']
+        war = float(row['WAR'])
+        delta = float(row['delta'])
+        peak = float(row['peak_WAR']) if not pd.isna(row['peak_WAR']) else war
+        prev = float(row['WAR_prev']) if not pd.isna(row['WAR_prev']) else war
+        name = row['name']
+
+        if name in TWP_PLAYERS:
+            return "TWP: Pitcher WAR only"
+
+        if delta > 0:  # sell high
+            if age >= 33:
+                notes.append("AGE RISK")
+            if war >= peak * 0.95:
+                notes.append("CAREER PEAK")
+        else:  # buy low
+            if prev < 1.0 and peak >= 5.0 and delta < -2.5:
+                notes.append("INJURY RELATED")
+            elif prev < 0.5 and war < 1.5:
+                notes.append("INJURY RELATED")
+
+        return ", ".join(notes) if notes else ""
+
+    def process(df, min_pa=None, min_ip=None, is_pitcher=False):
+        df = df[df['season'] == 2025].copy()
+        df['name'] = df['name'].apply(fix_encoding)
+        if min_pa is not None:
+            df = df[df['PA'] >= min_pa]
+        if min_ip is not None:
+            df = df[df['IP_x'] >= min_ip]
+        df = df.dropna(subset=['WAR_3yr_avg'])
+        df['delta'] = df['WAR'] - df['WAR_3yr_avg']
+        df = df.dropna(subset=['delta'])
+
+        # Filter out TWP pitcher side
+        if is_pitcher:
+            df = df[df['name'] != 'Shohei Ohtani']
+
+        # Require meaningful service history
+        df = df[df['service_years'].fillna(0) >= 4]
+
+        # Exclude true ascending breakouts: at/near career peak AND young
+        df = df[~((df['WAR'] >= df['peak_WAR'] * 0.95) & (df['age'] <= 31))]
+
+        records = []
+        for _, row in df.iterrows():
+            records.append({
+                'name': row['name'],
+                'team': row['team'],
+                'age': int(row['age']),
+                'war': round(float(row['WAR']), 1),
+                'war_3yr': round(float(row['WAR_3yr_avg']), 1),
+                'delta': round(float(row['delta']), 1),
+                'peak_war': round(float(row['peak_WAR']), 1) if not pd.isna(row['peak_WAR']) else None,
+                'position': str(row.get('role', row.get('position', ''))),
+                'notes': get_notes(row, is_pitcher),
+                'is_pitcher': is_pitcher
+            })
+
+        rdf = pd.DataFrame(records)
+        sell_high = rdf.nlargest(5, 'delta').to_dict('records')
+        buy_low = rdf.nsmallest(5, 'delta').to_dict('records')
+        return sell_high, buy_low
+
+    try:
+        h = pd.read_csv('data/real_seasons.csv')
+        p = pd.read_csv('data/pitcher_seasons.csv')
+        h_sell, h_buy = process(h, min_pa=200, is_pitcher=False)
+        p_sell, p_buy = process(p, min_ip=40, is_pitcher=True)
+        return jsonify({
+            'hitter_sell_high': h_sell,
+            'hitter_buy_low': h_buy,
+            'pitcher_sell_high': p_sell,
+            'pitcher_buy_low': p_buy
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route("/api/payroll/<team>")
 def get_team_payroll(team):
     """Return full contract/payroll data for a team."""
@@ -1823,7 +1918,7 @@ def get_historic_standings(year):
     
     # WS winners by year
     WS_WINNERS = {
-        2000:'NYY',2001:'ARI',2002:'ANA',2003:'FLA',2004:'BOS',
+        2000:'NYY',2001:'ARI',2002:'LAA',2003:'MIA',2004:'BOS',
         2005:'CHW',2006:'STL',2007:'BOS',2008:'PHI',2009:'NYY',
         2010:'SFG',2011:'STL',2012:'SFG',2013:'BOS',2014:'SFG',
         2015:'KCR',2016:'CHC',2017:'HOU',2018:'BOS',2019:'WSN',
