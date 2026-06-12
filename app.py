@@ -97,8 +97,13 @@ def index():
 
 @app.route("/api/players")
 def list_players():
-    """Return all unique player names for autocomplete."""
-    names = sorted(DATA["name"].unique().tolist())
+    """Return all unique player names for autocomplete, with encoding fixed."""
+    def fix_encoding(name):
+        try:
+            return name.encode('latin-1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return name
+    names = sorted(set(fix_encoding(n) for n in DATA["name"].unique().tolist()))
     return jsonify(names)
 
 
@@ -365,7 +370,12 @@ def get_pitcher(name):
 def list_pitchers():
     if PITCHER_DATA is None:
         return jsonify([])
-    names = sorted(PITCHER_DATA["name"].unique().tolist())
+    def fix_encoding(name):
+        try:
+            return name.encode('latin-1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return name
+    names = sorted(set(fix_encoding(n) for n in PITCHER_DATA["name"].unique().tolist()))
     return jsonify(names)
 
 
