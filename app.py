@@ -1475,6 +1475,15 @@ def get_market_intel():
         # Exclude true ascending breakouts: at/near career peak AND young
         df = df[~((df['WAR'] >= df['peak_WAR'] * 0.95) & (df['age'] <= 31))]
 
+        # Sell high: exclude elite consistent performers (3yr avg >= 6.0)
+        if is_pitcher == False:
+            df_sell = df[df['WAR_3yr_avg'] < 6.0]
+        else:
+            df_sell = df[df['WAR_3yr_avg'] < 6.0]
+
+        # Buy low: cap age at 35 — older players declining isn't a buy opportunity
+        df_buy = df[df['age'] <= 35]
+
         records = []
         for _, row in df.iterrows():
             records.append({
@@ -1491,20 +1500,30 @@ def get_market_intel():
             })
 
         rdf = pd.DataFrame(records)
-        sell_high = rdf.nlargest(5, 'delta').to_dict('records')
-        buy_low = rdf.nsmallest(5, 'delta').to_dict('records')
-        return sell_high, buy_low
+        # Sell high: exclude elite consistent performers (3yr avg >= 6.0)
+        sell_df = rdf[rdf['war_3yr'] < 6.0]
+        sell_high = sell_df.nlargest(5, 'delta').to_dict('records')
+        sell_high_ext = sell_df.nlargest(10, 'delta').to_dict('records')
+        # Buy low: cap age at 35
+        buy_df = rdf[rdf['age'] <= 35]
+        buy_low = buy_df.nsmallest(5, 'delta').to_dict('records')
+        buy_low_ext = buy_df.nsmallest(10, 'delta').to_dict('records')
+        return sell_high, buy_low, sell_high_ext, buy_low_ext
 
     try:
         h = pd.read_csv('data/real_seasons.csv')
         p = pd.read_csv('data/pitcher_seasons.csv')
-        h_sell, h_buy = process(h, min_pa=200, is_pitcher=False)
-        p_sell, p_buy = process(p, min_ip=40, is_pitcher=True)
+        h_sell, h_buy, h_sell_ext, h_buy_ext = process(h, min_pa=200, is_pitcher=False)
+        p_sell, p_buy, p_sell_ext, p_buy_ext = process(p, min_ip=40, is_pitcher=True)
         return jsonify({
             'hitter_sell_high': h_sell,
             'hitter_buy_low': h_buy,
             'pitcher_sell_high': p_sell,
-            'pitcher_buy_low': p_buy
+            'pitcher_buy_low': p_buy,
+            'hitter_sell_high_ext': h_sell_ext,
+            'hitter_buy_low_ext': h_buy_ext,
+            'pitcher_sell_high_ext': p_sell_ext,
+            'pitcher_buy_low_ext': p_buy_ext
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

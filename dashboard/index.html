@@ -1643,7 +1643,7 @@ function switchTab(tab) {
   if (tab === 'champ') { setTimeout(() => { initChampTab(); preloadAllChampYears(); }, 50); }
   if (tab === 'teamstats') loadLeagueStats();
   if (tab === 'fa') { const team = document.getElementById('global-team').value; if (team) { loadFANeeds(team); loadTeamPayroll(team); } }
-  if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); }
+  if (tab === 'trade') { const team = document.getElementById('global-team').value; if (team) { document.getElementById('trade-team-a').value = team; loadTradeRoster('a'); } loadTeamStats(); if (!intelLoaded) loadMarketIntel(); }
   if (tab === 'lineup') { loadLineupRoster(); loadPitchingRoster(); }
   const titles = {roster:'TEAM ROSTER', fa:'FREE AGENCY', trade:'TRADE CENTER', lineup:'LINEUP BUILDER', methodology:'METHODOLOGY', champ:'CHAMPION DNA', historic:'HISTORIC LOOKUP', payroll:'PAYROLL', teamstats:'LEAGUE STATS', intel:'MARKET INTEL'};
   document.getElementById('topbar-title').textContent = titles[tab] || '';
@@ -2110,7 +2110,7 @@ function renderTradeList(players, side) {
     div.dataset.ptype = ptype;
     div.onclick = function() { toggleTradePlayer(this.dataset.name, this.dataset.side, parseFloat(this.dataset.war), this.dataset.pos, this.dataset.ptype); };
     div.innerHTML =
-      '<div><div class="tp-name">'+p.name+'</div><div class="tp-meta">'+(p.position||p.role||'')+' · '+(p.archetype||'')+'</div></div>'+
+      '<div><div class="tp-name">'+p.name+getTradeSignalBadge(p.name)+'</div><div class="tp-meta">'+(p.position||p.role||'')+' · '+(p.archetype||'')+'</div></div>'+
       '<div class="tp-war" style="color:'+warColor+'">'+warVal+'W</div>';
     list.appendChild(div);
   });
@@ -4555,10 +4555,10 @@ function loadMarketIntel() {
 function getTradeSignalBadge(playerName) {
   if (!window.marketIntelData) return '';
   const all = [
-    ...window.marketIntelData.hitter_sell_high.map(p => ({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
-    ...window.marketIntelData.hitter_buy_low.map(p =>   ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
-    ...window.marketIntelData.pitcher_sell_high.map(p =>({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
-    ...window.marketIntelData.pitcher_buy_low.map(p =>  ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
+    ...(window.marketIntelData.hitter_sell_high_ext || window.marketIntelData.hitter_sell_high).map(p => ({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
+    ...(window.marketIntelData.hitter_buy_low_ext  || window.marketIntelData.hitter_buy_low).map(p =>   ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
+    ...(window.marketIntelData.pitcher_sell_high_ext || window.marketIntelData.pitcher_sell_high).map(p =>({...p, signal: 'SELL HIGH', cls: 'sell-high'})),
+    ...(window.marketIntelData.pitcher_buy_low_ext  || window.marketIntelData.pitcher_buy_low).map(p =>  ({...p, signal: 'BUY LOW',   cls: 'buy-low'})),
   ];
   const match = all.find(p => p.name.toLowerCase() === playerName.toLowerCase());
   if (!match) return '';
